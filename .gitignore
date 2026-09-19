@@ -1,0 +1,17 @@
+# https://dart.dev/tools/private-files
+# Created by `dart pub`
+.dart_tool/
+
+# Avoid committing pubspec.lock for library packages; see
+# https://dart.dev/tools/pub/private-files#pubspec-lock.
+pubspec.lock
+docs/superpowers
+.superpowers/
+graft/
+.agents/
+.claude/
+.config/
+
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
