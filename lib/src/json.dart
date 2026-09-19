@@ -7,7 +7,8 @@ import 'errors.dart';
 
 /// Parses a response body, preferring JSON and falling back to raw text.
 ///
-/// Returns `null` for an empty body. JSON is attempted regardless of
+/// Returns `null` for an empty body or a body containing literal JSON `null`.
+/// Callers cannot distinguish these two cases. JSON is attempted regardless of
 /// [contentType], because proxies and servers do not reliably set it.
 Object? parseBody(String text, String? contentType) {
   if (text.isEmpty) return null;
@@ -29,13 +30,12 @@ String encodeBody(Object? value, String fieldPath) {
   } on JsonUnsupportedObjectError catch (error) {
     throw TypeSafeError(
       'Could not encode `$fieldPath` as JSON: '
-      '${error.unsupportedObject.runtimeType} is not JSON-encodable and has '
-      'no toJson() method.',
+      '${error.unsupportedObject.runtimeType} is not JSON-encodable.',
     );
   } on NoSuchMethodError {
     throw TypeSafeError(
       'Could not encode `$fieldPath` as JSON: the value is not '
-      'JSON-encodable and has no toJson() method.',
+      'JSON-encodable.',
     );
   }
 }

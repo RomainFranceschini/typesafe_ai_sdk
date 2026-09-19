@@ -34,6 +34,10 @@ void main() {
     test('falls back to raw text when the body is not JSON', () {
       expect(parseBody('not json', 'application/json'), 'not json');
     });
+
+    test('returns null for a body that is the literal JSON null', () {
+      expect(parseBody('null', 'application/json'), isNull);
+    });
   });
 
   group('encodeBody', () {

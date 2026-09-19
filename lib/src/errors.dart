@@ -69,7 +69,8 @@ class ApiError extends TypeSafeError {
   /// The HTTP response status code.
   final int statusCode;
 
-  /// Parsed JSON, response text, or `null` for an empty body.
+  /// Parsed JSON, response text, or `null` for an empty body or a body
+  /// containing literal JSON `null`. Callers cannot distinguish these cases.
   final Object? body;
 
   /// The HTTP response headers, with lowercased names.
