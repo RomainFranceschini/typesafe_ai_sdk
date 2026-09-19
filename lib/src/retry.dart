@@ -118,41 +118,52 @@ final RegExp _imfFixdate = RegExp(
 ///
 /// `dart:io`'s `HttpDate.parse` is unavailable on web, so this package carries
 /// its own parser for the only date format `Retry-After` may use.
+/// Returns `null` if any field is out of range (e.g., day 32, hour 25).
 DateTime? parseHttpDate(String value) {
   final match = _imfFixdate.firstMatch(value.trim());
   if (match == null) return null;
   if (!_weekdays.contains(match.group(1))) return null;
   final month = _months.indexOf(match.group(3)!);
   if (month < 0) return null;
-  return DateTime.utc(
-    int.parse(match.group(4)!),
-    month + 1,
-    int.parse(match.group(2)!),
-    int.parse(match.group(5)!),
-    int.parse(match.group(6)!),
-    int.parse(match.group(7)!),
-  );
+  final year = int.parse(match.group(4)!);
+  final day = int.parse(match.group(2)!);
+  final hour = int.parse(match.group(5)!);
+  final minute = int.parse(match.group(6)!);
+  final second = int.parse(match.group(7)!);
+  final date = DateTime.utc(year, month + 1, day, hour, minute, second);
+  // Verify the date round-trips: if DateTime normalized any field (e.g., day 32
+  // became October 2), reject it as out-of-range.
+  if (date.year != year ||
+      date.month != month + 1 ||
+      date.day != day ||
+      date.hour != hour ||
+      date.minute != minute ||
+      date.second != second) {
+    return null;
+  }
+  return date;
 }
 
 /// Parses `retry-after-ms` or `Retry-After` into a delay.
 ///
-/// `retry-after-ms` wins when both are present. Returns `null` when neither
-/// header carries a valid, non-negative delay.
+/// `retry-after-ms` wins when both are present and valid. Returns `null` when
+/// neither header carries a valid, non-negative delay. Header names are
+/// expected to be lowercase.
 Duration? parseRetryAfter(Map<String, String> headers, {DateTime? now}) {
   final millis = headers['retry-after-ms'];
   if (millis != null) {
     final parsed = num.tryParse(millis.trim());
-    if (parsed != null && parsed >= 0) {
+    if (parsed != null && parsed.isFinite && parsed >= 0) {
       return Duration(milliseconds: parsed.round());
     }
-    return null;
+    // Fall through to retry-after if retry-after-ms is invalid.
   }
 
   final raw = headers['retry-after'];
   if (raw == null) return null;
 
   final seconds = num.tryParse(raw.trim());
-  if (seconds != null) {
+  if (seconds != null && seconds.isFinite) {
     return seconds >= 0
         ? Duration(milliseconds: (seconds * 1000).round())
         : null;

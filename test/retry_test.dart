@@ -89,6 +89,44 @@ void main() {
       expect(parseRetryAfter({'retry-after': 'soon'}), isNull);
       expect(parseRetryAfter({'retry-after-ms': 'soon'}), isNull);
     });
+
+    test('returns null for Infinity in retry-after-ms', () {
+      expect(parseRetryAfter({'retry-after-ms': 'Infinity'}), isNull);
+    });
+
+    test('returns null for Infinity in retry-after seconds', () {
+      expect(parseRetryAfter({'retry-after': 'Infinity'}), isNull);
+    });
+
+    test('falls through to retry-after when retry-after-ms is invalid', () {
+      expect(
+        parseRetryAfter({'retry-after-ms': 'soon', 'retry-after': '2'}),
+        const Duration(seconds: 2),
+      );
+    });
+
+    test('falls through to retry-after when retry-after-ms is negative', () {
+      expect(
+        parseRetryAfter({'retry-after-ms': '-5', 'retry-after': '3'}),
+        const Duration(seconds: 3),
+      );
+    });
+
+    test('returns null for IMF-fixdate with day 32', () {
+      // Day 32 is out of range for any month
+      expect(
+        parseRetryAfter({'retry-after': 'Sat, 32 Sep 2026 12:00:30 GMT'}),
+        isNull,
+      );
+    });
+
+    test('returns null for IMF-fixdate with hour 25', () {
+      // Hour 25 is out of range
+      expect(
+        parseRetryAfter({'retry-after': 'Sat, 19 Sep 2026 25:00:30 GMT'}),
+        isNull,
+      );
+    });
   });
 
   group('retryDelay', () {
