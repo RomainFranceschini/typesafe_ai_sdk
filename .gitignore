@@ -7,11 +7,10 @@
 pubspec.lock
 docs/superpowers
 .superpowers/
-graft/
+.ignore
 .agents/
 .claude/
 .config/
 
-
 # graft's local graph cache — regenerable, not committed (run `graft build`).
-/graft/
+graft/
