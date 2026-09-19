@@ -122,8 +122,33 @@ String Function(L) _defaultEncodeLabel<L extends Object>(
   String kind,
 ) {
   final sample = criteria.keys.first;
-  if (sample is String) return (label) => label as String;
-  if (sample is Enum) return (label) => (label as Enum).name;
+  if (sample is String) {
+    for (final label in criteria.keys) {
+      if (label is! String) {
+        throw TypeSafeError(
+          '$kind labels must all be the same type; expected String like '
+          '"$sample" but got ${label.runtimeType} ($label). Use '
+          '$kind.custom to supply encodeLabel and decodeLabel for mixed or '
+          'other label types.',
+        );
+      }
+    }
+    return (label) => label as String;
+  }
+  if (sample is Enum) {
+    final sampleType = sample.runtimeType;
+    for (final label in criteria.keys) {
+      if (label is! Enum || label.runtimeType != sampleType) {
+        throw TypeSafeError(
+          '$kind labels must all be the same enum type; expected '
+          '$sampleType like $sample but got ${label.runtimeType} ($label). '
+          'Use $kind.custom to supply encodeLabel and decodeLabel for '
+          'mixed or other label types.',
+        );
+      }
+    }
+    return (label) => (label as Enum).name;
+  }
   throw TypeSafeError(
     '$kind labels must be String or enum values, got '
     '${sample.runtimeType}. Use $kind.custom to supply encodeLabel and '
@@ -221,6 +246,15 @@ final class Choice<L extends Object> extends Question<ChoiceAnswer<L>> {
         'Question "$name": ${error.message}.',
         path: 'answers.$name.$field',
       );
+    } on Object catch (error) {
+      // A custom decodeLabel (from Choice.custom) may throw anything, e.g.
+      // FormatException or RangeError on an unrecognized wire label. Wrap it
+      // so callers only ever need to catch this SDK's error hierarchy.
+      throw ApiResponseValidationError(
+        'Question "$name": decodeLabel rejected the API label "$raw" '
+        '($error).',
+        path: 'answers.$name.$field',
+      );
     }
   }
 
@@ -252,7 +286,7 @@ final class Choice<L extends Object> extends Question<ChoiceAnswer<L>> {
           _decode(entry.key, name, 'probabilities'): _asDouble(
             entry.value,
             name,
-            'probabilities',
+            'probabilities["${entry.key}"]',
           ),
       },
     );
@@ -265,10 +299,11 @@ final class Choice<L extends Object> extends Question<ChoiceAnswer<L>> {
 /// key the rubric by an ordered enum.
 final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
   Score._({
-    required this.scale,
+    required List<L> scale,
     required Map<L, Object?> criteria,
     super.instructions,
-  }) : criteria = Map.unmodifiable(criteria);
+  }) : scale = List.unmodifiable(scale),
+       criteria = Map.unmodifiable(criteria);
 
   /// Creates a score question from an ordered list of descriptions.
   ///
@@ -306,6 +341,16 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
         'Score criteria must have at least two entries, got '
         '${criteria.length}.',
       );
+    }
+    final sample = criteria.keys.first;
+    final sampleType = sample.runtimeType;
+    for (final level in criteria.keys) {
+      if (level.runtimeType != sampleType) {
+        throw TypeSafeError(
+          'Score.ofEnum criteria must all be the same enum type; expected '
+          '$sampleType like $sample but got ${level.runtimeType} ($level).',
+        );
+      }
     }
     final ordered = criteria.keys.toList()
       ..sort((a, b) => a.index.compareTo(b.index));
@@ -347,7 +392,7 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
     Map<String, Object?> raw,
     String name,
     String field,
-    T Function(Object? value) convert,
+    T Function(Object? value, String key) convert,
   ) {
     final result = <L, T>{};
     for (final entry in raw.entries) {
@@ -359,7 +404,7 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
           path: 'answers.$name.$field',
         );
       }
-      result[_levelAt(index, name, field)] = convert(entry.value);
+      result[_levelAt(index, name, field)] = convert(entry.value, entry.key);
     }
     return result;
   }
@@ -381,13 +426,13 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
         _requireMap(json, 'legend', name),
         name,
         'legend',
-        (value) => value,
+        (value, key) => value,
       ),
       probabilities: _byLevel<double>(
         _requireMap(json, 'probabilities', name),
         name,
         'probabilities',
-        (value) => _asDouble(value, name, 'probabilities'),
+        (value, key) => _asDouble(value, name, 'probabilities["$key"]'),
       ),
       scale: scale,
     );

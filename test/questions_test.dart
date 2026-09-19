@@ -80,7 +80,7 @@ void main() {
       expect(answer.probabilities, {'billing': 0.9, 'technical': 0.1});
     });
 
-    test('rejects a non-numeric probability value', () {
+    test('rejects a non-numeric probability value, naming the entry', () {
       expect(
         () => question.decodeAnswer({
           'type': 'choice',
@@ -89,16 +89,18 @@ void main() {
           'probabilities': {'billing': 'high', 'technical': 0.1},
         }, 'category'),
         throwsA(
-          isA<ApiResponseValidationError>().having(
-            (e) => e.path,
-            'path',
-            'answers.category.probabilities',
-          ),
+          isA<ApiResponseValidationError>()
+              .having(
+                (e) => e.path,
+                'path',
+                'answers.category.probabilities["billing"]',
+              )
+              .having((e) => e.message, 'message', contains('billing')),
         ),
       );
     });
 
-    test('rejects a null probability value', () {
+    test('rejects a null probability value, naming the entry', () {
       expect(
         () => question.decodeAnswer({
           'type': 'choice',
@@ -110,7 +112,7 @@ void main() {
           isA<ApiResponseValidationError>().having(
             (e) => e.path,
             'path',
-            'answers.category.probabilities',
+            'answers.category.probabilities["billing"]',
           ),
         ),
       );
@@ -173,11 +175,20 @@ void main() {
       expect(
         () => Choice({1: null, 2: null}),
         throwsA(
-          isA<TypeSafeError>().having(
-            (e) => e.message,
-            'message',
-            contains('Choice.custom'),
-          ),
+          isA<TypeSafeError>()
+              .having((e) => e.runtimeType, 'runtimeType', TypeSafeError)
+              .having((e) => e.message, 'message', contains('Choice.custom')),
+        ),
+      );
+    });
+
+    test('rejects a mix of String and enum labels', () {
+      expect(
+        () => Choice({'billing': null, _Tone.calm: null}),
+        throwsA(
+          isA<TypeSafeError>()
+              .having((e) => e.runtimeType, 'runtimeType', TypeSafeError)
+              .having((e) => e.message, 'message', contains('same type')),
         ),
       );
     });
@@ -191,7 +202,13 @@ void main() {
           encodeLabel: (label) => label.toString(),
           decodeLabel: (raw) => int.parse(raw),
         ),
-        throwsA(isA<TypeSafeError>()),
+        throwsA(
+          isA<TypeSafeError>().having(
+            (e) => e.runtimeType,
+            'runtimeType',
+            TypeSafeError,
+          ),
+        ),
       );
     });
 
@@ -203,22 +220,60 @@ void main() {
           decodeLabel: (raw) => 1,
         ),
         throwsA(
-          isA<TypeSafeError>().having(
-            (e) => e.message,
-            'message',
-            contains('encodeLabel must be injective'),
-          ),
+          isA<TypeSafeError>()
+              .having((e) => e.runtimeType, 'runtimeType', TypeSafeError)
+              .having(
+                (e) => e.message,
+                'message',
+                contains('encodeLabel must be injective'),
+              ),
         ),
       );
     });
 
-    test('accepts distinct wire encodings', () {
+    test('round-trips through encodeLabel and decodeLabel', () {
       final question = Choice<int>.custom(
         criteria: const {1: 'one', 2: 'two'},
         encodeLabel: (label) => 'n$label',
         decodeLabel: (raw) => int.parse(raw.substring(1)),
       );
       expect(question.toJson()['criteria'], {'n1': 'one', 'n2': 'two'});
+
+      final answer = question.decodeAnswer({
+        'type': 'choice',
+        'choice': 'n2',
+        'confidence': 0.7,
+        'probabilities': {'n1': 0.3, 'n2': 0.7},
+      }, 'category');
+      expect(answer.choice, 2);
+      expect(answer.probabilities, {1: 0.3, 2: 0.7});
+    });
+
+    test('wraps a decodeLabel exception as ApiResponseValidationError', () {
+      final question = Choice<int>.custom(
+        criteria: const {1: 'one', 2: 'two'},
+        encodeLabel: (label) => 'n$label',
+        decodeLabel: (raw) => int.parse(raw.substring(1)),
+      );
+      expect(
+        () => question.decodeAnswer({
+          'type': 'choice',
+          // 'x'.substring(1) is '', so int.parse throws FormatException,
+          // not ApiResponseValidationError.
+          'choice': 'x',
+          'confidence': 0.5,
+          'probabilities': <String, Object?>{},
+        }, 'category'),
+        throwsA(
+          isA<ApiResponseValidationError>()
+              .having((e) => e.path, 'path', 'answers.category.choice')
+              .having(
+                (e) => e.message,
+                'message',
+                allOf(contains('category'), contains('decodeLabel')),
+              ),
+        ),
+      );
     });
   });
 
@@ -268,7 +323,7 @@ void main() {
       expect(answer.nearestLevel, 1);
     });
 
-    test('rejects a non-numeric probability value', () {
+    test('rejects a non-numeric probability value, naming the entry', () {
       expect(
         () => question.decodeAnswer({
           'type': 'score',
@@ -278,16 +333,18 @@ void main() {
           'probabilities': {'0': 'low', '1': 0.6, '2': 0.2},
         }, 'urgency'),
         throwsA(
-          isA<ApiResponseValidationError>().having(
-            (e) => e.path,
-            'path',
-            'answers.urgency.probabilities',
-          ),
+          isA<ApiResponseValidationError>()
+              .having(
+                (e) => e.path,
+                'path',
+                'answers.urgency.probabilities["0"]',
+              )
+              .having((e) => e.message, 'message', contains('"0"')),
         ),
       );
     });
 
-    test('rejects a null probability value', () {
+    test('rejects a null probability value, naming the entry', () {
       expect(
         () => question.decodeAnswer({
           'type': 'score',
@@ -300,10 +357,14 @@ void main() {
           isA<ApiResponseValidationError>().having(
             (e) => e.path,
             'path',
-            'answers.urgency.probabilities',
+            'answers.urgency.probabilities["0"]',
           ),
         ),
       );
+    });
+
+    test('scale is unmodifiable', () {
+      expect(() => question.scale.add(3), throwsA(isA<UnsupportedError>()));
     });
 
     test('rejects a score key outside the rubric', () {
@@ -381,11 +442,20 @@ void main() {
       expect(
         () => Score.ofEnum({_Gapped.zero: 'a', _Gapped.two: 'c'}),
         throwsA(
-          isA<TypeSafeError>().having(
-            (e) => e.message,
-            'message',
-            contains('contiguous'),
-          ),
+          isA<TypeSafeError>()
+              .having((e) => e.runtimeType, 'runtimeType', TypeSafeError)
+              .having((e) => e.message, 'message', contains('contiguous')),
+        ),
+      );
+    });
+
+    test('rejects a mix of different enum types', () {
+      expect(
+        () => Score.ofEnum({_Tone.calm: 'calm', _Gapped.one: 'one'}),
+        throwsA(
+          isA<TypeSafeError>()
+              .having((e) => e.runtimeType, 'runtimeType', TypeSafeError)
+              .having((e) => e.message, 'message', contains('same enum type')),
         ),
       );
     });
