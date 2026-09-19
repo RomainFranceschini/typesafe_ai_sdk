@@ -52,7 +52,7 @@ String? _describeValidationErrors(List<Object?> errors) {
     if (msg is! String) continue;
     final loc = entry['loc'];
     final path = loc is List
-        ? loc.where((part) => part != 'body').join('.')
+        ? (loc.isNotEmpty && loc.first == 'body' ? loc.skip(1) : loc).join('.')
         : '';
     parts.add(path.isEmpty ? msg : '$path: $msg');
   }

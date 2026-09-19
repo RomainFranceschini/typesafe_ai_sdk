@@ -59,6 +59,15 @@ void main() {
       );
     });
 
+    test('uses a nested detail message', () {
+      expect(
+        ApiError.fromResponse(400, {
+          'detail': {'message': 'nested detail'},
+        }, {}).message,
+        '400 nested detail',
+      );
+    });
+
     test('formats a validation array, dropping the body prefix', () {
       final error = ApiError.fromResponse(422, {
         'detail': [
@@ -76,6 +85,18 @@ void main() {
         error.message,
         '422 questions: field required; state: must be a string',
       );
+    });
+
+    test('preserves body in the middle of a validation error path', () {
+      final error = ApiError.fromResponse(422, {
+        'detail': [
+          {
+            'loc': ['body', 'email', 'body'],
+            'msg': 'field required',
+          },
+        ],
+      }, {});
+      expect(error.message, '422 email.body: field required');
     });
 
     test('describes an empty body', () {
