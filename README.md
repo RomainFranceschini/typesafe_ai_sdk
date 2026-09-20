@@ -108,5 +108,5 @@ dart format .
 dart analyze
 dart test                                   # unit tests
 TYPESAFE_API_KEY=... dart test test/integration/   # live API tests
-dart compile js -o /dev/null tool/web_compile_check.dart   # web build check
+TMP_DIR=$(mktemp -d) && dart compile js -o "$TMP_DIR/out.js" tool/web_compile_check.dart && rm -rf "$TMP_DIR"   # web build check
 ```

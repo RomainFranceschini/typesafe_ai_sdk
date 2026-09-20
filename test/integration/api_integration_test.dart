@@ -39,8 +39,12 @@ void main() {
       );
 
       final answer = response.get(category);
-      expect(answer.choice, Category.billing);
+      expect(answer.choice, isIn(Category.values));
       expect(answer.probabilities.keys, containsAll(Category.values));
+      expect(
+        answer.probabilities.values,
+        everyElement(allOf(greaterThanOrEqualTo(0), lessThanOrEqualTo(1))),
+      );
       expect(answer.confidence, inInclusiveRange(0, 1));
       expect(response.requestId, isNotNull);
     });

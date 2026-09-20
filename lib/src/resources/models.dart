@@ -47,7 +47,14 @@ final class ModelCard {
 /// The models available to the account.
 final class Models {
   /// Creates the resource over [_transport].
-  Models(this._transport);
+  ///
+  /// Not part of the public API. Use [TypeSafeClient.models] instead.
+  Models._(this._transport);
+
+  /// Internal constructor for use within the SDK only.
+  ///
+  /// Use [TypeSafeClient.models] to access models from user code.
+  factory Models(Transport transport) => Models._(transport);
 
   final Transport _transport;
 
@@ -64,7 +71,10 @@ final class Models {
       retry: retry,
       timeout: timeout,
     );
-    final body = parseBody(response.body, response.headers['content-type']);
+    final body = parseBody(
+      readBodySafely(response),
+      response.headers['content-type'],
+    );
     final models = body is Map ? body['models'] : null;
     if (models is! List) {
       throw ApiResponseValidationError(

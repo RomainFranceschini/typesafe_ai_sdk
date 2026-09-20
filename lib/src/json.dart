@@ -3,7 +3,27 @@ library;
 
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
+
 import 'errors.dart';
+
+/// Reads a response body safely without letting a malformed `Content-Type` throw.
+///
+/// [http.Response.body] parses `Content-Type` with `MediaType.parse`, which
+/// throws a [FormatException] on a header it cannot fully consume — for
+/// example duplicate `Content-Type` response headers, which HTTP clients
+/// join with `, ` into a single invalid value. On a successful (2xx) response,
+/// this would crash the caller with an exception outside the SDK's error
+/// hierarchy. This function falls back to a best-effort UTF-8 decode of the
+/// raw bytes when the header is malformed, ensuring that both error and
+/// success paths can safely access the body.
+String readBodySafely(http.Response response) {
+  try {
+    return response.body;
+  } on FormatException {
+    return utf8.decode(response.bodyBytes, allowMalformed: true);
+  }
+}
 
 /// Parses a response body, preferring JSON and falling back to raw text.
 ///

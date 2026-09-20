@@ -180,6 +180,45 @@ void main() {
         ),
       );
     });
+
+    test('rejects a scheme-less base URL', () {
+      expect(
+        () => resolve(apiKey: 'k', baseUrl: 'api.typesafe.ai'),
+        throwsA(
+          isA<TypeSafeError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('baseUrl'), contains('absolute')),
+          ),
+        ),
+      );
+    });
+
+    test('rejects a base URL with invalid scheme', () {
+      expect(
+        () => resolve(apiKey: 'k', baseUrl: 'ftp://api.typesafe.ai'),
+        throwsA(
+          isA<TypeSafeError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('baseUrl'), contains('http')),
+          ),
+        ),
+      );
+    });
+
+    test('rejects a base URL that is all slashes', () {
+      expect(
+        () => resolve(apiKey: 'k', baseUrl: '///'),
+        throwsA(
+          isA<TypeSafeError>().having(
+            (e) => e.message,
+            'message',
+            contains('baseUrl'),
+          ),
+        ),
+      );
+    });
   });
 
   group('browser guard', () {

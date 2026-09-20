@@ -87,6 +87,19 @@ void main() {
       expect(requests.single.headers['x-typesafe-sdk'], isNotNull);
     });
 
+    test('removes caller-supplied user-agent in a browser', () async {
+      final transport = transportFor(
+        (_) async => http.Response('{}', 200),
+        browser: true,
+      );
+      await transport.send(
+        'GET',
+        '/v1/models',
+        headers: {'user-agent': 'custom/1.0'},
+      );
+      expect(requests.single.headers.containsKey('user-agent'), isFalse);
+    });
+
     test('caller headers cannot clobber authorization', () async {
       final transport = transportFor((_) async => http.Response('{}', 200));
       await transport.send(

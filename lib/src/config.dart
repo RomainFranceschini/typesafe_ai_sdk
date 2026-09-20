@@ -94,11 +94,14 @@ final class ResolvedConfig {
     final resolvedRetry = retry ?? RetryPolicy();
     _validateRetry(resolvedRetry);
 
+    final resolvedBaseUrl = _stripTrailingSlashes(
+      baseUrl ?? readEnv(EnvVars.baseUrl) ?? defaultBaseUrl,
+    );
+    _validateBaseUrl(resolvedBaseUrl);
+
     return ResolvedConfig._(
       apiKey: key,
-      baseUrl: _stripTrailingSlashes(
-        baseUrl ?? readEnv(EnvVars.baseUrl) ?? defaultBaseUrl,
-      ),
+      baseUrl: resolvedBaseUrl,
       defaultModel:
           defaultModel ?? readEnv(EnvVars.defaultModel) ?? defaultModelName,
       logLevel: _resolveLogLevel(logLevel, readEnv),
@@ -137,6 +140,34 @@ final class ResolvedConfig {
     final fromEnv = readEnv(EnvVars.logLevel);
     if (fromEnv != null) return parseLogLevel(fromEnv, EnvVars.logLevel);
     return LogLevel.warn;
+  }
+
+  static void _validateBaseUrl(String baseUrl) {
+    if (baseUrl.isEmpty) {
+      throw TypeSafeError(
+        '`baseUrl` must not be empty. Received an empty string after '
+        'stripping trailing slashes.',
+      );
+    }
+    try {
+      final uri = Uri.parse(baseUrl);
+      if (!uri.isAbsolute) {
+        throw TypeSafeError(
+          '`baseUrl` must be an absolute URL with a scheme. '
+          'Received: "$baseUrl"',
+        );
+      }
+      if (uri.scheme != 'http' && uri.scheme != 'https') {
+        throw TypeSafeError(
+          '`baseUrl` must use http or https scheme. '
+          'Received: "$baseUrl"',
+        );
+      }
+    } on FormatException catch (e) {
+      throw TypeSafeError(
+        '`baseUrl` is not a valid URL. Received: "$baseUrl". Error: ${e.message}',
+      );
+    }
   }
 
   static void _validateRetry(RetryPolicy policy) {

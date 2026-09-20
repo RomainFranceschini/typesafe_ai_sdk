@@ -170,6 +170,25 @@ void main() {
     client.close();
   });
 
+  test('handles a 200 response with a malformed Content-Type header', () async {
+    final client = clientFor(
+      (_) async => http.Response.bytes(
+        utf8.encode(_systemOneBody()),
+        200,
+        headers: {'content-type': 'application/json, text/html'},
+      ),
+    );
+
+    final isBilling = Noul(instructions: 'Is this billing?');
+    final response = await client.systemOne(
+      state: 'x',
+      questions: {'isBilling': isBilling},
+    );
+
+    expect(response.get(isBilling).noul, 0.9);
+    client.close();
+  });
+
   group('http client ownership', () {
     test('does not close an injected client', () {
       final injected = _TrackingClient(

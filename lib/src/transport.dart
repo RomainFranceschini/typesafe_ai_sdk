@@ -2,7 +2,6 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
@@ -135,7 +134,7 @@ final class Transport {
       }
 
       final errorBody = parseBody(
-        _readBody(response),
+        readBodySafely(response),
         response.headers['content-type'],
       );
       _logger.debug('$tag <- error body', errorBody);
@@ -194,22 +193,6 @@ final class Transport {
   /// for the one place the raw key touches request construction.
   String _scrub(String message) => message.replaceAll(_apiKey, '***');
 
-  /// Reads a response body without letting a malformed `Content-Type` throw.
-  ///
-  /// [http.Response.body] parses `Content-Type` with `MediaType.parse`, which
-  /// throws a [FormatException] on a header it cannot fully consume — for
-  /// example duplicate `Content-Type` response headers, which HTTP clients
-  /// join with `, ` into a single invalid value. That must not crash the
-  /// error-mapping path, so a bad header falls back to a best-effort UTF-8
-  /// decode of the raw bytes.
-  String _readBody(http.Response response) {
-    try {
-      return response.body;
-    } on FormatException {
-      return utf8.decode(response.bodyBytes, allowMalformed: true);
-    }
-  }
-
   bool _shouldRetryError(ApiConnectionError error, RetryPolicy policy) =>
       error is ApiTimeoutError
       ? policy.retryTimeouts
@@ -251,7 +234,11 @@ final class Transport {
     if (hasBody) put('content-type', 'application/json');
     // Browsers reject attempts to set User-Agent; X-TypeSafe-SDK carries the
     // same information and is allowed.
-    if (!_browser) put('user-agent', sdkIdentifier);
+    if (!_browser) {
+      put('user-agent', sdkIdentifier);
+    } else {
+      merged.remove('user-agent');
+    }
     merged.remove('x-typesafe-retry-count');
 
     return merged;

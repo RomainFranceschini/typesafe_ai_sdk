@@ -152,7 +152,10 @@ final class TypeSafeClient {
     );
 
     return decodeSystemOne(
-      body: parseBody(response.body, response.headers['content-type']),
+      body: parseBody(
+        readBodySafely(response),
+        response.headers['content-type'],
+      ),
       questions: questions,
       httpResponse: response,
       logger: _logger,

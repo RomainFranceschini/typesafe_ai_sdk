@@ -103,4 +103,38 @@ void main() {
       throwsA(isA<AuthenticationError>()),
     );
   });
+
+  test('handles a 200 response with a malformed Content-Type header', () async {
+    final responseBody = jsonEncode({
+      'models': [
+        {
+          'name': 'jev-latest',
+          'description': 'The latest model',
+          'release_date': '2026-09-01',
+        },
+      ],
+    });
+    final transport = Transport(
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(
+          utf8.encode(responseBody),
+          200,
+          headers: {'content-type': 'application/json, text/html'},
+        );
+      }),
+      baseUrl: 'https://api.example',
+      apiKey: 'k',
+      defaultHeaders: const {},
+      logger: _SilentLogger(),
+      retry: RetryPolicy().copyWith(maxRetries: 0),
+      timeout: const Duration(seconds: 5),
+      sleep: (duration) async {},
+      runtime: 'dart/test (test)',
+      browser: false,
+    );
+    final models = Models(transport);
+    final result = await models.list();
+    expect(result, hasLength(1));
+    expect(result.single.name, 'jev-latest');
+  });
 }
