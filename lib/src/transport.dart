@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
@@ -85,6 +86,14 @@ final class Transport {
     RetryPolicy? retry,
     Duration? timeout,
   }) async {
+    // A path that does not start with `/` can shift `baseUrl` into the
+    // userinfo component of the parsed URI (e.g. a path beginning with `@`),
+    // sending the `Authorization` header to a host the caller never named.
+    // No caller reaches `send()` yet, but callers are wired in later tasks,
+    // so this is validated here rather than left to whoever adds them.
+    if (!path.startsWith('/')) {
+      throw TypeSafeError('`path` must start with "/", got "$path".');
+    }
     final policy = retry ?? this.retry;
     final attemptTimeout = timeout ?? this.timeout;
     final url = Uri.parse('$baseUrl$path');
@@ -116,7 +125,14 @@ final class Transport {
         );
       } on ApiConnectionError catch (error) {
         if (retriesLeft <= 0 || !_shouldRetryError(error, policy)) rethrow;
-        await _backOff(tag, attempt, retriesLeft, error.message, null, policy);
+        await _backOff(
+          tag,
+          attempt,
+          retriesLeft,
+          _scrub(error.message),
+          null,
+          policy,
+        );
         continue;
       }
 
@@ -132,7 +148,7 @@ final class Transport {
       }
 
       final errorBody = parseBody(
-        response.body,
+        _readBody(response),
         response.headers['content-type'],
       );
       _logger.debug('$tag <- error body', errorBody);
@@ -166,6 +182,12 @@ final class Transport {
     final request = http.Request(method, url)..headers.addAll(headers);
     if (body != null) request.body = body;
     try {
+      // `.timeout()` abandons this future on expiry, but it does not cancel
+      // the underlying send: `package:http` has no `AbortController`
+      // equivalent, and request cancellation was deliberately left out of
+      // this SDK's design. A slow server can therefore leave up to
+      // `maxRetries + 1` requests in flight after `send()` has already
+      // thrown or returned.
       return await _httpClient
           .send(request)
           .then(http.Response.fromStream)
@@ -173,9 +195,31 @@ final class Transport {
     } on TimeoutException {
       throw ApiTimeoutError(timeout);
     } on http.ClientException catch (error) {
-      throw ApiConnectionError('Connection error: ${error.message}');
+      throw ApiConnectionError(_scrub('Connection error: ${error.message}'));
     } on Exception catch (error) {
-      throw ApiConnectionError('Connection error: $error');
+      throw ApiConnectionError(_scrub('Connection error: $error'));
+    }
+  }
+
+  /// Scrubs the API key from a string built from an underlying exception,
+  /// in case a third-party [http.Client]'s `toString()` echoes outbound
+  /// request headers. No in-tree client does this; this is defense in depth
+  /// for the one place the raw key touches request construction.
+  String _scrub(String message) => message.replaceAll(_apiKey, '***');
+
+  /// Reads a response body without letting a malformed `Content-Type` throw.
+  ///
+  /// [http.Response.body] parses `Content-Type` with `MediaType.parse`, which
+  /// throws a [FormatException] on a header it cannot fully consume — for
+  /// example duplicate `Content-Type` response headers, which HTTP clients
+  /// join with `, ` into a single invalid value. That must not crash the
+  /// error-mapping path, so a bad header falls back to a best-effort UTF-8
+  /// decode of the raw bytes.
+  String _readBody(http.Response response) {
+    try {
+      return response.body;
+    } on FormatException {
+      return utf8.decode(response.bodyBytes, allowMalformed: true);
     }
   }
 
@@ -206,7 +250,8 @@ final class Transport {
     required bool hasBody,
   }) {
     final merged = <String, String>{};
-    void put(String name, String value) => merged[name.toLowerCase()] = value;
+    void put(String name, String value) =>
+        merged[name.trim().toLowerCase()] = value;
 
     _defaultHeaders.forEach(put);
     perCall?.forEach(put);

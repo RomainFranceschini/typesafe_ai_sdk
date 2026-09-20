@@ -280,6 +280,51 @@ void main() {
         ),
       );
     });
+
+    test('maps a non-2xx response with a malformed Content-Type instead of '
+        'throwing a FormatException', () async {
+      // A duplicated Content-Type response header is joined by HTTP
+      // clients into one comma-separated value, which `http.Response.body`
+      // cannot parse and throws a FormatException on. The error path must
+      // survive that and still produce an ApiError.
+      //
+      // Built with `Response.bytes` rather than the `Response(String, ...)`
+      // constructor: the latter parses Content-Type eagerly (to choose an
+      // encoding) at construction time, which would throw here in the test
+      // handler itself rather than exercising the lazy `body` getter that
+      // `Transport` actually reads.
+      final transport = transportFor(
+        (_) async => http.Response.bytes(
+          utf8.encode('not actually json'),
+          500,
+          headers: {'content-type': 'application/json, text/html'},
+        ),
+      );
+      await expectLater(
+        transport.send('GET', '/v1/models'),
+        throwsA(isA<InternalServerError>()),
+      );
+    });
+
+    test('trims stray whitespace from header names', () async {
+      final transport = transportFor((_) async => http.Response('{}', 200));
+      await transport.send(
+        'GET',
+        '/v1/models',
+        headers: {' x-tenant ': 'acme'},
+      );
+      expect(requests.single.headers['x-tenant'], 'acme');
+      expect(requests.single.headers.containsKey(' x-tenant '), isFalse);
+    });
+
+    test('rejects a path that does not start with "/"', () async {
+      final transport = transportFor((_) async => http.Response('{}', 200));
+      await expectLater(
+        transport.send('GET', '@evil.example/v1'),
+        throwsA(isA<TypeSafeError>()),
+      );
+      expect(requests, isEmpty);
+    });
   });
 
   test('never logs the API key, even at debug level', () async {
@@ -299,6 +344,34 @@ void main() {
       browser: false,
     );
     await transport.send('POST', '/v1/systemone', body: {'a': 1});
+    expect(records.join('\n'), isNot(contains('sk-secret-key-value')));
+    expect(records.join('\n'), contains('***'));
+  });
+
+  test('never logs the API key on a failing response, through the error-body '
+      'debug log or the retry log', () async {
+    final records = <String>[];
+    final capturing = _CapturingLogger(records);
+    var calls = 0;
+    final transport = Transport(
+      httpClient: MockClient((_) async {
+        calls++;
+        return calls < 2
+            ? http.Response('server exploded', 500)
+            : http.Response('{}', 200);
+      }),
+      baseUrl: 'https://api.example',
+      apiKey: 'sk-secret-key-value',
+      defaultHeaders: const {},
+      logger: capturing,
+      retry: RetryPolicy(),
+      timeout: const Duration(seconds: 5),
+      random: _ZeroRandom(),
+      sleep: (duration) async {},
+      runtime: 'dart/test (test)',
+      browser: false,
+    );
+    await transport.send('GET', '/v1/models');
     expect(records.join('\n'), isNot(contains('sk-secret-key-value')));
     expect(records.join('\n'), contains('***'));
   });
