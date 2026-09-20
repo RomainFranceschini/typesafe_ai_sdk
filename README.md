@@ -129,6 +129,12 @@ CORS preflight.
 
 MIT
 
+## AI disclosure
+
+This project was developed with substantial assistance from AI coding tools.
+Generated code has been reviewed, tested, and is maintained by a human.
+Please report any issues through the issue tracker.
+
 ## Contributing
 
 ```sh
