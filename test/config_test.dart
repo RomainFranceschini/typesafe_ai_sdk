@@ -103,6 +103,14 @@ void main() {
       );
     });
 
+    test('rejects an explicitly empty API key', () {
+      expect(() => resolve(apiKey: ''), throwsA(isA<TypeSafeError>()));
+    });
+
+    test('rejects a whitespace-only API key', () {
+      expect(() => resolve(apiKey: '   '), throwsA(isA<TypeSafeError>()));
+    });
+
     test('rejects a non-positive timeout', () {
       expect(
         () => resolve(apiKey: 'k', timeout: Duration.zero),

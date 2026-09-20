@@ -1,0 +1,184 @@
+/// The API client.
+library;
+
+import 'package:http/http.dart' as http;
+
+import 'answers.dart';
+import 'config.dart';
+import 'json.dart';
+import 'logging.dart';
+import 'questions.dart';
+import 'resources/models.dart';
+import 'response.dart';
+import 'retry.dart';
+import 'transport.dart';
+
+/// A client for the TypeSafe AI API.
+///
+/// Explicit options take precedence over environment variables, then SDK
+/// defaults. Call [close] when finished, unless you supplied [httpClient], in
+/// which case closing it is yours to do.
+final class TypeSafeClient {
+  /// Creates a client.
+  ///
+  /// Throws [TypeSafeError] when the API key is missing, configuration is
+  /// invalid, or the SDK is running in a browser without
+  /// [dangerouslyAllowBrowser].
+  factory TypeSafeClient({
+    String? apiKey,
+    String? baseUrl,
+    String? defaultModel,
+    LogLevel? logLevel,
+    Logger? logger,
+    RetryPolicy? retry,
+    Duration? timeout,
+    Map<String, String>? defaultHeaders,
+    http.Client? httpClient,
+    bool dangerouslyAllowBrowser = false,
+  }) {
+    final config = ResolvedConfig.resolve(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      defaultModel: defaultModel,
+      logLevel: logLevel,
+      timeout: timeout,
+      retry: retry,
+      defaultHeaders: defaultHeaders,
+      dangerouslyAllowBrowser: dangerouslyAllowBrowser,
+    );
+    final leveled = withLevel(
+      logger ?? const DeveloperLogger(),
+      config.logLevel,
+    );
+    final client = httpClient ?? http.Client();
+    final transport = Transport(
+      httpClient: client,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      defaultHeaders: config.defaultHeaders,
+      logger: leveled,
+      retry: config.retry,
+      timeout: config.timeout,
+    );
+    return TypeSafeClient._(
+      config: config,
+      logger: leveled,
+      httpClient: client,
+      ownsHttpClient: httpClient == null,
+      transport: transport,
+      models: Models(transport),
+    );
+  }
+
+  TypeSafeClient._({
+    required ResolvedConfig config,
+    required Logger logger,
+    required http.Client httpClient,
+    required bool ownsHttpClient,
+    required Transport transport,
+    required this.models,
+  })
+    // These fields are private while their constructor parameters keep
+    // public (non-underscored) names, so an initializing formal is not an
+    // option here: `this._config` would force callers to write
+    // `TypeSafeClient._(_config: ...)`, which is not a valid public label.
+    // (See the identical situation and rationale in `Transport`.)
+    // ignore: prefer_initializing_formals
+    : _config = config,
+       // ignore: prefer_initializing_formals
+       _logger = logger,
+       // ignore: prefer_initializing_formals
+       _httpClient = httpClient,
+       // ignore: prefer_initializing_formals
+       _ownsHttpClient = ownsHttpClient,
+       // ignore: prefer_initializing_formals
+       _transport = transport;
+
+  final ResolvedConfig _config;
+  final Logger _logger;
+  final http.Client _httpClient;
+  final bool _ownsHttpClient;
+  final Transport _transport;
+
+  /// The models available to the account.
+  final Models models;
+
+  /// The API root, without trailing slashes.
+  String get baseUrl => _config.baseUrl;
+
+  /// The model used when a request omits one.
+  String get defaultModel => _config.defaultModel;
+
+  /// The configured log verbosity.
+  LogLevel get logLevel => _config.logLevel;
+
+  /// The retry policy. Build per-call overrides with `copyWith`.
+  RetryPolicy get retry => _config.retry;
+
+  /// The per-attempt timeout.
+  Duration get timeout => _config.timeout;
+
+  /// Answers named questions about text or structured state.
+  ///
+  /// [state] may be a string, a JSON-encodable map or list, `null`, or any
+  /// object exposing a `toJson()` method.
+  ///
+  /// Throws [TypeSafeError] when [questions] is empty or [state] cannot be
+  /// encoded, [ApiError] for a non-2xx response that survives retries, and
+  /// [ApiConnectionError] when the request cannot be delivered.
+  ///
+  /// ```dart
+  /// final billing = Noul(instructions: 'Is this about billing?');
+  /// final response = await client.systemOne(
+  ///   state: 'I was charged twice.',
+  ///   questions: {'billing': billing},
+  /// );
+  /// print(response.get(billing).noul);
+  /// ```
+  Future<SystemOneResponse> systemOne({
+    required Object? state,
+    required Map<String, Question<Answer>> questions,
+    String? model,
+    Duration? timeout,
+    RetryPolicy? retry,
+    Map<String, String>? headers,
+  }) async {
+    validateQuestions(questions);
+    // Encoded once here purely to fail with the field name the caller knows.
+    // The transport re-encodes the whole body; for large states that is a
+    // second pass, which is a fair trade for an actionable error message.
+    encodeBody(state, 'state');
+
+    final body = <String, Object?>{
+      'state': state,
+      'questions': {
+        for (final entry in questions.entries) entry.key: entry.value.toJson(),
+      },
+      'model': model ?? _config.defaultModel,
+    };
+
+    final response = await _transport.send(
+      'POST',
+      '/v1/systemone',
+      body: body,
+      headers: headers,
+      retry: retry,
+      timeout: timeout,
+    );
+
+    return decodeSystemOne(
+      body: parseBody(response.body, response.headers['content-type']),
+      questions: questions,
+      httpResponse: response,
+      logger: _logger,
+    );
+  }
+
+  /// Releases the underlying HTTP client.
+  ///
+  /// Does nothing when the client was supplied to the constructor, since it
+  /// belongs to the caller.
+  void close() {
+    if (_ownsHttpClient) _httpClient.close();
+  }
+}

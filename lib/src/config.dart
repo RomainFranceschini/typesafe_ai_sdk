@@ -80,6 +80,9 @@ final class ResolvedConfig {
         'constructor or set the ${EnvVars.apiKey} environment variable.',
       );
     }
+    if (key.trim().isEmpty) {
+      throw TypeSafeError('`apiKey` must not be empty or whitespace-only.');
+    }
 
     final resolvedTimeout = timeout ?? defaultTimeout;
     if (resolvedTimeout <= Duration.zero) {
