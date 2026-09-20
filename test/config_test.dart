@@ -198,5 +198,18 @@ void main() {
         'k',
       );
     });
+
+    test('the browser guard fires before the missing-key error', () {
+      expect(
+        () => resolve(browser: true),
+        throwsA(
+          isA<TypeSafeError>().having(
+            (e) => e.message,
+            'message',
+            contains('dangerouslyAllowBrowser'),
+          ),
+        ),
+      );
+    });
   });
 }
