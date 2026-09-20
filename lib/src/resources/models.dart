@@ -62,7 +62,7 @@ final class ModelCard {
 
 /// The models available to the account.
 final class Models {
-  /// Creates the resource over [transport].
+  /// Creates the resource over the given [Transport].
   ///
   /// [Transport] is not exported, so this is unreachable from user code. Read
   /// `TypeSafeClient.models` instead.
