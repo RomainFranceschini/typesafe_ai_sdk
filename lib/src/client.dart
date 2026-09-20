@@ -71,28 +71,13 @@ final class TypeSafeClient {
   }
 
   TypeSafeClient._({
-    required ResolvedConfig config,
-    required Logger logger,
-    required http.Client httpClient,
-    required bool ownsHttpClient,
-    required Transport transport,
+    required this._config,
+    required this._logger,
+    required this._httpClient,
+    required this._ownsHttpClient,
+    required this._transport,
     required this.models,
-  })
-    // These fields are private while their constructor parameters keep
-    // public (non-underscored) names, so an initializing formal is not an
-    // option here: `this._config` would force callers to write
-    // `TypeSafeClient._(_config: ...)`, which is not a valid public label.
-    // (See the identical situation and rationale in `Transport`.)
-    // ignore: prefer_initializing_formals
-    : _config = config,
-       // ignore: prefer_initializing_formals
-       _logger = logger,
-       // ignore: prefer_initializing_formals
-       _httpClient = httpClient,
-       // ignore: prefer_initializing_formals
-       _ownsHttpClient = ownsHttpClient,
-       // ignore: prefer_initializing_formals
-       _transport = transport;
+  });
 
   final ResolvedConfig _config;
   final Logger _logger;

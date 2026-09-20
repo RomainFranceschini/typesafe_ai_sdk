@@ -24,31 +24,18 @@ final class Transport {
   /// [random], [sleep], [runtime], and [browser] exist for tests; they default
   /// to real implementations.
   Transport({
-    required http.Client httpClient,
+    required this._httpClient,
     required this.baseUrl,
-    required String apiKey,
-    required Map<String, String> defaultHeaders,
-    required Logger logger,
+    required this._apiKey,
+    required this._defaultHeaders,
+    required this._logger,
     required this.retry,
     required this.timeout,
     Random? random,
     Future<void> Function(Duration)? sleep,
     String? runtime,
     bool? browser,
-  })
-    // These four fields are private while their constructor parameters keep
-    // public (non-underscored) names, so an initializing formal is not an
-    // option here: `this._httpClient` would force callers to write
-    // `Transport(_httpClient: ...)`, which is not a valid public label.
-    // ignore: prefer_initializing_formals
-    : _httpClient = httpClient,
-       // ignore: prefer_initializing_formals
-       _apiKey = apiKey,
-       // ignore: prefer_initializing_formals
-       _defaultHeaders = defaultHeaders,
-       // ignore: prefer_initializing_formals
-       _logger = logger,
-       _random = random ?? Random(),
+  }) : _random = random ?? Random(),
        _sleep = sleep ?? Future<void>.delayed,
        _runtime = runtime ?? platform.describeRuntime(),
        _browser = browser ?? platform.isBrowser;
