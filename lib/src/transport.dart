@@ -133,7 +133,7 @@ final class Transport {
         return response;
       }
 
-      final errorBody = parseBody(readBodySafely(response));
+      final errorBody = parseBody(response.bodyBytes);
       _logger.fine(() => '$tag <- error body $errorBody');
       final error = ApiError.fromResponse(
         response.statusCode,
@@ -159,11 +159,11 @@ final class Transport {
     String method,
     Uri url,
     Map<String, String> headers,
-    String? body,
+    List<int>? body,
     Duration timeout,
   ) async {
     final request = http.Request(method, url)..headers.addAll(headers);
-    if (body != null) request.body = body;
+    if (body != null) request.bodyBytes = body;
     try {
       // `.timeout()` abandons this future on expiry, but it does not cancel
       // the underlying send: `package:http` has no `AbortController`

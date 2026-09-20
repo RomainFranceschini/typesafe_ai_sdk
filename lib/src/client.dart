@@ -144,7 +144,7 @@ final class TypeSafeClient {
     );
 
     return decodeSystemOne(
-      body: parseBody(readBodySafely(response)),
+      body: parseBody(response.bodyBytes),
       questions: questions,
       httpResponse: response,
       logger: _logger,

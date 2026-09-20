@@ -83,7 +83,7 @@ final class Models {
       retry: retry,
       timeout: timeout,
     );
-    final body = parseBody(readBodySafely(response));
+    final body = parseBody(response.bodyBytes);
     final models = body is Map ? body['models'] : null;
     if (models is! List) {
       throw ApiResponseValidationError(

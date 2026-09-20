@@ -290,16 +290,16 @@ void main() {
 
     test('maps a non-2xx response with a malformed Content-Type instead of '
         'throwing a FormatException', () async {
-      // A duplicated Content-Type response header is joined by HTTP
-      // clients into one comma-separated value, which `http.Response.body`
-      // cannot parse and throws a FormatException on. The error path must
-      // survive that and still produce an ApiError.
+      // A duplicated Content-Type response header is joined by HTTP clients
+      // into one comma-separated value, which `http.Response.body` cannot
+      // parse and throws a FormatException on. `Transport` reads `bodyBytes`
+      // and never consults the header, so the error path produces an ApiError;
+      // this guards against a regression back to the `body` getter.
       //
       // Built with `Response.bytes` rather than the `Response(String, ...)`
       // constructor: the latter parses Content-Type eagerly (to choose an
       // encoding) at construction time, which would throw here in the test
-      // handler itself rather than exercising the lazy `body` getter that
-      // `Transport` actually reads.
+      // handler itself.
       final transport = transportFor(
         (_) async => http.Response.bytes(
           utf8.encode('not actually json'),
