@@ -46,7 +46,7 @@ final class ModelCard {
 
 /// The models available to the account.
 final class Models {
-  /// Creates the resource over [transport].
+  /// Creates the resource over [_transport].
   Models(this._transport);
 
   final Transport _transport;

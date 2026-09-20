@@ -99,3 +99,14 @@ CORS preflight.
 ## License
 
 MIT
+
+## Contributing
+
+```sh
+dart pub get
+dart format .
+dart analyze
+dart test                                   # unit tests
+TYPESAFE_API_KEY=... dart test test/integration/   # live API tests
+dart compile js -o /dev/null tool/web_compile_check.dart   # web build check
+```
