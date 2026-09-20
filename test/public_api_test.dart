@@ -18,8 +18,7 @@ void main() {
 
     // Configuration and policy.
     expect(RetryPolicy().maxRetries, 2);
-    expect(LogLevel.warn, isA<LogLevel>());
-    expect(const DeveloperLogger(), isA<Logger>());
+    expect(sdkLoggerName, 'typesafe_ai_sdk');
     expect(EnvVars.apiKey, 'TYPESAFE_API_KEY');
     expect(defaultBaseUrl, 'https://api.typesafe.ai');
     expect(defaultModelName, 'jev-latest');

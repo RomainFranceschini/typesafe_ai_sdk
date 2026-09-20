@@ -1,7 +1,6 @@
 import 'package:test/test.dart';
 import 'package:typesafe_ai_sdk/src/config.dart';
 import 'package:typesafe_ai_sdk/src/errors.dart';
-import 'package:typesafe_ai_sdk/src/logging.dart';
 import 'package:typesafe_ai_sdk/src/retry.dart';
 
 String? Function(String) envOf(Map<String, String> values) {
@@ -15,7 +14,6 @@ ResolvedConfig resolve({
   String? apiKey,
   String? baseUrl,
   String? defaultModel,
-  LogLevel? logLevel,
   Duration? timeout,
   RetryPolicy? retry,
   Map<String, String> env = const {},
@@ -25,7 +23,6 @@ ResolvedConfig resolve({
   apiKey: apiKey,
   baseUrl: baseUrl,
   defaultModel: defaultModel,
-  logLevel: logLevel,
   timeout: timeout,
   retry: retry,
   dangerouslyAllowBrowser: dangerouslyAllowBrowser,
@@ -60,7 +57,6 @@ void main() {
       expect(config.defaultModel, 'jev-latest');
       expect(config.baseUrl, 'https://api.typesafe.ai');
       expect(config.timeout, const Duration(seconds: 10));
-      expect(config.logLevel, LogLevel.warn);
     });
 
     test('blank environment values are ignored', () {
@@ -78,13 +74,6 @@ void main() {
       expect(
         resolve(apiKey: 'k', baseUrl: 'https://x.example///').baseUrl,
         'https://x.example',
-      );
-    });
-
-    test('parses the log level from the environment', () {
-      expect(
-        resolve(apiKey: 'k', env: {'TYPESAFE_LOG_LEVEL': 'debug'}).logLevel,
-        LogLevel.debug,
       );
     });
   });
@@ -163,19 +152,6 @@ void main() {
             (e) => e.message,
             'message',
             contains('httpStatuses'),
-          ),
-        ),
-      );
-    });
-
-    test('rejects an invalid log level from the environment', () {
-      expect(
-        () => resolve(apiKey: 'k', env: {'TYPESAFE_LOG_LEVEL': 'loud'}),
-        throwsA(
-          isA<TypeSafeError>().having(
-            (e) => e.message,
-            'message',
-            contains('TYPESAFE_LOG_LEVEL'),
           ),
         ),
       );

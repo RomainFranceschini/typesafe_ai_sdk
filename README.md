@@ -69,7 +69,6 @@ Choice and score labels can be Dart enums, which the official SDKs cannot do.
 | `apiKey` | `TYPESAFE_API_KEY` | required |
 | `baseUrl` | `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` |
 | `defaultModel` | `TYPESAFE_DEFAULT_MODEL` | `jev-latest` |
-| `logLevel` | `TYPESAFE_LOG_LEVEL` | `warn` |
 | `timeout` | — | 10 s per attempt |
 | `retry` | — | 2 retries, 500 ms to 5 s backoff |
 
@@ -77,6 +76,36 @@ Explicit values beat environment variables, which beat defaults.
 
 Call `client.close()` when finished. If you pass your own `httpClient`,
 closing it is yours to do.
+
+## Logging
+
+The SDK logs through [`package:logging`][logging] under the logger named
+`typesafe_ai_sdk`, with `.transport` and `.response` children. Like any
+well-behaved library it installs no handler, so it prints nothing until your
+application attaches one:
+
+```dart
+import 'package:logging/logging.dart';
+
+Logger.root.level = Level.INFO;
+Logger.root.onRecord.listen((record) {
+  print('${record.level.name}: ${record.loggerName}: ${record.message}');
+});
+```
+
+`Level.INFO` carries one line per request with its status, elapsed time, and
+request ID. `Level.FINE` adds the full URL, headers, and bodies; credential
+headers (`Authorization`, `X-Api-Key`, `Cookie`, and friends) are masked, but
+bodies are not, so avoid `FINE` where the transcript is untrusted.
+
+Pass `logger:` to `TypeSafeClient` to place the SDK's records under a logger of
+your own instead:
+
+```dart
+final client = TypeSafeClient(logger: Logger('myapp.typesafe'));
+```
+
+[logging]: https://pub.dev/packages/logging
 
 ## Platform support
 

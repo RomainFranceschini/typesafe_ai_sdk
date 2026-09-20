@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 
 import 'errors.dart';
 import 'json.dart';
@@ -94,10 +95,11 @@ final class Transport {
           ? baseHeaders
           : {...baseHeaders, 'x-typesafe-retry-count': '$attempt'};
 
-      _logger.debug('$tag -> $url', {
-        'headers': redactHeaders(attemptHeaders),
-        'body': body,
-      });
+      _logger.fine(
+        () =>
+            '$tag -> $url headers: ${redactHeaders(attemptHeaders)} '
+            'body: $body',
+      );
 
       final started = DateTime.now();
       http.Response response;
@@ -137,7 +139,7 @@ final class Transport {
         readBodySafely(response),
         response.headers['content-type'],
       );
-      _logger.debug('$tag <- error body', errorBody);
+      _logger.fine(() => '$tag <- error body $errorBody');
       final error = ApiError.fromResponse(
         response.statusCode,
         errorBody,

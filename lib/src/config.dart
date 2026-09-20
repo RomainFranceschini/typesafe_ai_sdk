@@ -2,7 +2,6 @@
 library;
 
 import 'errors.dart';
-import 'logging.dart';
 import 'platform/platform.dart' as platform;
 import 'retry.dart';
 
@@ -16,9 +15,6 @@ abstract final class EnvVars {
 
   /// The default model name.
   static const String defaultModel = 'TYPESAFE_DEFAULT_MODEL';
-
-  /// The log level.
-  static const String logLevel = 'TYPESAFE_LOG_LEVEL';
 }
 
 /// The API root used when none is configured.
@@ -39,7 +35,6 @@ final class ResolvedConfig {
     required this.apiKey,
     required this.baseUrl,
     required this.defaultModel,
-    required this.logLevel,
     required this.timeout,
     required this.retry,
     required this.defaultHeaders,
@@ -54,7 +49,6 @@ final class ResolvedConfig {
     String? apiKey,
     String? baseUrl,
     String? defaultModel,
-    LogLevel? logLevel,
     Duration? timeout,
     RetryPolicy? retry,
     Map<String, String>? defaultHeaders,
@@ -104,7 +98,6 @@ final class ResolvedConfig {
       baseUrl: resolvedBaseUrl,
       defaultModel:
           defaultModel ?? readEnv(EnvVars.defaultModel) ?? defaultModelName,
-      logLevel: _resolveLogLevel(logLevel, readEnv),
       timeout: resolvedTimeout,
       retry: resolvedRetry,
       defaultHeaders: Map.unmodifiable(defaultHeaders ?? const {}),
@@ -120,9 +113,6 @@ final class ResolvedConfig {
   /// The model used when a request omits one.
   final String defaultModel;
 
-  /// The configured log verbosity.
-  final LogLevel logLevel;
-
   /// The per-attempt timeout.
   final Duration timeout;
 
@@ -131,16 +121,6 @@ final class ResolvedConfig {
 
   /// Headers added to every request.
   final Map<String, String> defaultHeaders;
-
-  static LogLevel _resolveLogLevel(
-    LogLevel? fromCode,
-    String? Function(String) readEnv,
-  ) {
-    if (fromCode != null) return fromCode;
-    final fromEnv = readEnv(EnvVars.logLevel);
-    if (fromEnv != null) return parseLogLevel(fromEnv, EnvVars.logLevel);
-    return LogLevel.warn;
-  }
 
   static void _validateBaseUrl(String baseUrl) {
     if (baseUrl.isEmpty) {

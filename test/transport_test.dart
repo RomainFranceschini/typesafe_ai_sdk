@@ -4,22 +4,16 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:logging/logging.dart';
 import 'package:test/test.dart';
 import 'package:typesafe_ai_sdk/src/errors.dart';
-import 'package:typesafe_ai_sdk/src/logging.dart';
 import 'package:typesafe_ai_sdk/src/retry.dart';
 import 'package:typesafe_ai_sdk/src/transport.dart';
 
-class _SilentLogger implements Logger {
-  @override
-  void debug(String message, [Object? data]) {}
-  @override
-  void info(String message, [Object? data]) {}
-  @override
-  void warn(String message, [Object? data]) {}
-  @override
-  void error(String message, [Object? data]) {}
-}
+import 'support/log_capture.dart';
+
+/// A logger with no listener, so records go nowhere.
+Logger _silentLogger() => Logger('test.transport.silent');
 
 class _ZeroRandom implements Random {
   @override
@@ -54,7 +48,7 @@ void main() {
       baseUrl: 'https://api.example',
       apiKey: 'sk-secret-key-value',
       defaultHeaders: defaultHeaders,
-      logger: _SilentLogger(),
+      logger: _silentLogger(),
       retry: retry ?? RetryPolicy(),
       timeout: timeout,
       random: _ZeroRandom(),
@@ -341,14 +335,14 @@ void main() {
   });
 
   test('never logs the API key, even at debug level', () async {
-    final records = <String>[];
-    final capturing = _CapturingLogger(records);
+    final capture = LogCapture('transport');
+    addTearDown(capture.cancel);
     final transport = Transport(
       httpClient: MockClient((_) async => http.Response('{}', 200)),
       baseUrl: 'https://api.example',
       apiKey: 'sk-secret-key-value',
       defaultHeaders: const {},
-      logger: capturing,
+      logger: capture.logger,
       retry: RetryPolicy(),
       timeout: const Duration(seconds: 5),
       random: _ZeroRandom(),
@@ -357,14 +351,15 @@ void main() {
       browser: false,
     );
     await transport.send('POST', '/v1/systemone', body: {'a': 1});
-    expect(records.join('\n'), isNot(contains('sk-secret-key-value')));
-    expect(records.join('\n'), contains('***'));
+    final logged = capture.records.map((r) => r.message).join('\n');
+    expect(logged, isNot(contains('sk-secret-key-value')));
+    expect(logged, contains('***'));
   });
 
   test('never logs the API key on a failing response, through the error-body '
       'debug log or the retry log', () async {
-    final records = <String>[];
-    final capturing = _CapturingLogger(records);
+    final capture = LogCapture('transport');
+    addTearDown(capture.cancel);
     var calls = 0;
     final transport = Transport(
       httpClient: MockClient((_) async {
@@ -376,7 +371,7 @@ void main() {
       baseUrl: 'https://api.example',
       apiKey: 'sk-secret-key-value',
       defaultHeaders: const {},
-      logger: capturing,
+      logger: capture.logger,
       retry: RetryPolicy(),
       timeout: const Duration(seconds: 5),
       random: _ZeroRandom(),
@@ -385,22 +380,8 @@ void main() {
       browser: false,
     );
     await transport.send('GET', '/v1/models');
-    expect(records.join('\n'), isNot(contains('sk-secret-key-value')));
-    expect(records.join('\n'), contains('***'));
+    final logged = capture.records.map((r) => r.message).join('\n');
+    expect(logged, isNot(contains('sk-secret-key-value')));
+    expect(logged, contains('***'));
   });
-}
-
-class _CapturingLogger implements Logger {
-  _CapturingLogger(this.records);
-  final List<String> records;
-  void _add(String message, Object? data) =>
-      records.add('$message ${data ?? ''}');
-  @override
-  void debug(String message, [Object? data]) => _add(message, data);
-  @override
-  void info(String message, [Object? data]) => _add(message, data);
-  @override
-  void warn(String message, [Object? data]) => _add(message, data);
-  @override
-  void error(String message, [Object? data]) => _add(message, data);
 }

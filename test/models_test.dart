@@ -2,23 +2,15 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:logging/logging.dart';
 import 'package:test/test.dart';
 import 'package:typesafe_ai_sdk/src/errors.dart';
-import 'package:typesafe_ai_sdk/src/logging.dart';
 import 'package:typesafe_ai_sdk/src/resources/models.dart';
 import 'package:typesafe_ai_sdk/src/retry.dart';
 import 'package:typesafe_ai_sdk/src/transport.dart';
 
-class _SilentLogger implements Logger {
-  @override
-  void debug(String message, [Object? data]) {}
-  @override
-  void info(String message, [Object? data]) {}
-  @override
-  void warn(String message, [Object? data]) {}
-  @override
-  void error(String message, [Object? data]) {}
-}
+/// A logger with no listener, so records go nowhere.
+Logger _silentLogger() => Logger('test.models.silent');
 
 Models modelsFor(String responseBody, {int status = 200}) {
   final transport = Transport(
@@ -34,7 +26,7 @@ Models modelsFor(String responseBody, {int status = 200}) {
     baseUrl: 'https://api.example',
     apiKey: 'k',
     defaultHeaders: const {},
-    logger: _SilentLogger(),
+    logger: _silentLogger(),
     retry: RetryPolicy().copyWith(maxRetries: 0),
     timeout: const Duration(seconds: 5),
     sleep: (duration) async {},
@@ -125,7 +117,7 @@ void main() {
       baseUrl: 'https://api.example',
       apiKey: 'k',
       defaultHeaders: const {},
-      logger: _SilentLogger(),
+      logger: _silentLogger(),
       retry: RetryPolicy().copyWith(maxRetries: 0),
       timeout: const Duration(seconds: 5),
       sleep: (duration) async {},

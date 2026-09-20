@@ -2,6 +2,7 @@
 library;
 
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 
 import 'answers.dart';
 import 'config.dart';
@@ -28,7 +29,6 @@ final class TypeSafeClient {
     String? apiKey,
     String? baseUrl,
     String? defaultModel,
-    LogLevel? logLevel,
     Logger? logger,
     RetryPolicy? retry,
     Duration? timeout,
@@ -40,29 +40,25 @@ final class TypeSafeClient {
       apiKey: apiKey,
       baseUrl: baseUrl,
       defaultModel: defaultModel,
-      logLevel: logLevel,
       timeout: timeout,
       retry: retry,
       defaultHeaders: defaultHeaders,
       dangerouslyAllowBrowser: dangerouslyAllowBrowser,
     );
-    final leveled = withLevel(
-      logger ?? const DeveloperLogger(),
-      config.logLevel,
-    );
+    final base = logger ?? defaultLogger;
     final client = httpClient ?? http.Client();
     final transport = Transport(
       httpClient: client,
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
       defaultHeaders: config.defaultHeaders,
-      logger: leveled,
+      logger: childLogger(base, 'transport'),
       retry: config.retry,
       timeout: config.timeout,
     );
     return TypeSafeClient._(
       config: config,
-      logger: leveled,
+      logger: childLogger(base, 'response'),
       httpClient: client,
       ownsHttpClient: httpClient == null,
       transport: transport,
@@ -93,9 +89,6 @@ final class TypeSafeClient {
 
   /// The model used when a request omits one.
   String get defaultModel => _config.defaultModel;
-
-  /// The configured log verbosity.
-  LogLevel get logLevel => _config.logLevel;
 
   /// The retry policy. Build per-call overrides with `copyWith`.
   RetryPolicy get retry => _config.retry;

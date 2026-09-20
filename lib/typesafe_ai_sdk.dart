@@ -25,7 +25,7 @@ export 'src/errors.dart'
         TypeSafeError,
         UnprocessableEntityError,
         requestIdHeader;
-export 'src/logging.dart' show DeveloperLogger, LogLevel, Logger;
+export 'src/logging.dart' show sdkLoggerName;
 export 'src/questions.dart' show Choice, Noul, NoulCriteria, Question, Score;
 export 'src/resources/models.dart' show ModelCard, Models;
 export 'src/response.dart' show SystemOneResponse, Usage;

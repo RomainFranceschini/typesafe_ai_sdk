@@ -2,10 +2,10 @@
 library;
 
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 
 import 'answers.dart';
 import 'errors.dart';
-import 'logging.dart';
 import 'questions.dart';
 
 /// Token counts for a request, when the API reports them.
@@ -158,7 +158,7 @@ SystemOneResponse decodeSystemOne({
         );
       }
       if (!knownAnswerTypes.contains(type)) {
-        logger.warn(
+        logger.warning(
           'Ignoring answer "$name" with unrecognized type "$type". Upgrade '
           'the SDK to read it, or use httpResponse for the raw payload.',
         );
@@ -166,7 +166,7 @@ SystemOneResponse decodeSystemOne({
       }
       final question = questions[name];
       if (question == null) {
-        logger.warn('Ignoring answer "$name", which no question requested.');
+        logger.warning('Ignoring answer "$name", which no question requested.');
         continue;
       }
       answers[name] = question.decodeAnswer(answer, name);

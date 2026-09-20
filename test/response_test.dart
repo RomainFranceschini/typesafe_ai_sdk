@@ -1,24 +1,17 @@
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 import 'package:test/test.dart';
 import 'package:typesafe_ai_sdk/src/answers.dart';
 import 'package:typesafe_ai_sdk/src/errors.dart';
-import 'package:typesafe_ai_sdk/src/logging.dart';
 import 'package:typesafe_ai_sdk/src/questions.dart';
 import 'package:typesafe_ai_sdk/src/response.dart';
 
+import 'support/log_capture.dart';
+
 enum _Tone { calm, frustrated, angry }
 
-class _RecordingLogger implements Logger {
-  final List<String> warnings = [];
-  @override
-  void debug(String message, [Object? data]) {}
-  @override
-  void info(String message, [Object? data]) {}
-  @override
-  void warn(String message, [Object? data]) => warnings.add(message);
-  @override
-  void error(String message, [Object? data]) {}
-}
+/// A logger with no listener, so records go nowhere.
+Logger _silentLogger() => Logger('test.response.silent');
 
 http.Response _http({Map<String, String> headers = const {}}) =>
     http.Response('{}', 200, headers: headers);
@@ -68,7 +61,7 @@ void main() {
     body: override ?? body(),
     questions: questions ?? questionSet(),
     httpResponse: _http(headers: headers),
-    logger: logger ?? _RecordingLogger(),
+    logger: logger ?? _silentLogger(),
   );
 
   group('metadata', () {
@@ -165,29 +158,31 @@ void main() {
 
   group('forward compatibility', () {
     test('drops answers with an unrecognized type and warns', () {
-      final logger = _RecordingLogger();
+      final capture = LogCapture('response');
+      addTearDown(capture.cancel);
       final raw = body();
       (raw['answers']! as Map<String, Object?>)['future'] = {
         'type': 'quantum',
         'value': 1,
       };
-      final response = decode(override: raw, logger: logger);
+      final response = decode(override: raw, logger: capture.logger);
       expect(response.answers.containsKey('future'), isFalse);
-      expect(logger.warnings.single, contains('quantum'));
+      expect(capture.messagesAt(Level.WARNING).single, contains('quantum'));
       // The known answers still decode.
       expect(response.get(isBilling).noul, 0.91);
     });
 
     test('drops an answer no question asked for and warns', () {
-      final logger = _RecordingLogger();
+      final capture = LogCapture('response');
+      addTearDown(capture.cancel);
       final raw = body();
       (raw['answers']! as Map<String, Object?>)['stray'] = {
         'type': 'noul',
         'noul': 0.5,
       };
-      final response = decode(override: raw, logger: logger);
+      final response = decode(override: raw, logger: capture.logger);
       expect(response.answers.containsKey('stray'), isFalse);
-      expect(logger.warnings.single, contains('stray'));
+      expect(capture.messagesAt(Level.WARNING).single, contains('stray'));
     });
   });
 
@@ -198,7 +193,7 @@ void main() {
           body: 'not json',
           questions: questionSet(),
           httpResponse: _http(),
-          logger: _RecordingLogger(),
+          logger: _silentLogger(),
         ),
         throwsA(isA<ApiResponseValidationError>()),
       );

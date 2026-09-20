@@ -1,5 +1,6 @@
 // Run with: dart run example/typesafe_ai_sdk_example.dart
 // Requires TYPESAFE_API_KEY in the environment.
+import 'package:logging/logging.dart';
 import 'package:typesafe_ai_sdk/typesafe_ai_sdk.dart';
 
 enum Tone { calm, frustrated, angry }
@@ -7,7 +8,14 @@ enum Tone { calm, frustrated, angry }
 enum Urgency { canWait, thisWeek, today, rightNow }
 
 Future<void> main() async {
-  final client = TypeSafeClient(logLevel: LogLevel.info);
+  // The SDK logs nothing until you attach a handler. Raise the level to
+  // Level.ALL to see full request and response detail.
+  Logger.root.level = Level.INFO;
+  Logger.root.onRecord.listen((record) {
+    print('${record.level.name}: ${record.loggerName}: ${record.message}');
+  });
+
+  final client = TypeSafeClient();
 
   try {
     final models = await client.models.list();
