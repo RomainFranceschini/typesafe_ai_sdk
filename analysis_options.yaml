@@ -13,3 +13,4 @@ linter:
     - public_member_api_docs
     - prefer_final_locals
     - always_declare_return_types
+    - avoid_print

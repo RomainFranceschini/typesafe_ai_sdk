@@ -84,10 +84,5 @@ List<int> encodeBody(Object? value, String fieldPath) {
       '${_describeOffendingValue(error.unsupportedObject)} is not '
       'JSON-encodable.',
     );
-  } on NoSuchMethodError {
-    throw TypeSafeError(
-      'Could not encode `$fieldPath` as JSON: the value is not '
-      'JSON-encodable.',
-    );
   }
 }

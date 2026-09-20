@@ -80,6 +80,17 @@ void main() {
       expect(answer.probabilities, {'billing': 0.9, 'technical': 0.1});
     });
 
+    test('hands out an unmodifiable probabilities map', () {
+      // The answer derives `==` and `hashCode` from this map.
+      final answer = question.decodeAnswer({
+        'type': 'choice',
+        'choice': 'billing',
+        'confidence': 0.9,
+        'probabilities': {'billing': 0.9, 'technical': 0.1},
+      }, 'category');
+      expect(() => answer.probabilities.clear(), throwsUnsupportedError);
+    });
+
     test('rejects a non-numeric probability value, naming the entry', () {
       expect(
         () => question.decodeAnswer({
@@ -321,6 +332,19 @@ void main() {
       expect(answer.legend[1], 'today');
       expect(answer.probabilities[2], 0.2);
       expect(answer.nearestLevel, 1);
+    });
+
+    test('hands out unmodifiable legend and probabilities maps', () {
+      // The answer derives `==` and `hashCode` from these maps.
+      final answer = question.decodeAnswer({
+        'type': 'score',
+        'score': 1.4,
+        'confidence': 0.8,
+        'legend': {'0': 'can wait', '1': 'today', '2': 'right now'},
+        'probabilities': {'0': 0.2, '1': 0.6, '2': 0.2},
+      }, 'urgency');
+      expect(() => answer.legend.clear(), throwsUnsupportedError);
+      expect(() => answer.probabilities.clear(), throwsUnsupportedError);
     });
 
     test('rejects a non-numeric probability value, naming the entry', () {

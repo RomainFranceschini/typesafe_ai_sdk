@@ -75,6 +75,13 @@ final class SystemOneResponse {
   final String? requestId;
 
   /// The underlying HTTP response, with its body already read.
+  ///
+  /// Read the payload from `httpResponse.bodyBytes`, not `httpResponse.body`:
+  /// the `body` getter parses the `Content-Type` header and throws a
+  /// [FormatException] on a value it cannot fully consume — for example the
+  /// duplicate `Content-Type` headers some proxies emit, which HTTP clients
+  /// join with `, ` into a single invalid value. This SDK reads the bytes
+  /// everywhere for that reason.
   final http.Response httpResponse;
 
   final Map<Question<Answer>, List<String>> _namesByQuestion;
@@ -124,7 +131,7 @@ final class SystemOneResponse {
 /// Answers whose `type` this SDK version does not recognize, and answers no
 /// question asked for, are dropped with a warning rather than failing the
 /// whole response. The raw payload remains available through
-/// [SystemOneResponse.httpResponse].
+/// [SystemOneResponse.httpResponse] (read its `bodyBytes`).
 SystemOneResponse decodeSystemOne({
   required Object? body,
   required Map<String, Question<Answer>> questions,
@@ -152,39 +159,47 @@ SystemOneResponse decodeSystemOne({
       : const Usage();
 
   final rawAnswers = decoded['answers'];
+  // Validated like `model` above: a missing or non-object `answers` is a
+  // malformed payload, and accepting it silently would surface much later as
+  // an `ArgumentError` from `get()` blaming the caller's question handle.
+  if (rawAnswers is! Map) {
+    throw ApiResponseValidationError(
+      'Expected an object `answers`, got ${rawAnswers.runtimeType}.',
+      path: 'answers',
+    );
+  }
   final answers = <String, Answer>{};
-  if (rawAnswers is Map) {
-    for (final entry in rawAnswers.cast<String, Object?>().entries) {
-      final name = entry.key;
-      final raw = entry.value;
-      if (raw is! Map) {
-        throw ApiResponseValidationError(
-          'Expected answer "$name" to be an object, got ${raw.runtimeType}.',
-          path: 'answers.$name',
-        );
-      }
-      final answer = raw.cast<String, Object?>();
-      final type = answer['type'];
-      if (type is! String) {
-        throw ApiResponseValidationError(
-          'Answer "$name" has no string `type`.',
-          path: 'answers.$name.type',
-        );
-      }
-      if (!knownAnswerTypes.contains(type)) {
-        logger.warning(
-          'Ignoring answer "$name" with unrecognized type "$type". Upgrade '
-          'the SDK to read it, or use httpResponse for the raw payload.',
-        );
-        continue;
-      }
-      final question = questions[name];
-      if (question == null) {
-        logger.warning('Ignoring answer "$name", which no question requested.');
-        continue;
-      }
-      answers[name] = question.decodeAnswer(answer, name);
+  for (final entry in rawAnswers.cast<String, Object?>().entries) {
+    final name = entry.key;
+    final raw = entry.value;
+    if (raw is! Map) {
+      throw ApiResponseValidationError(
+        'Expected answer "$name" to be an object, got ${raw.runtimeType}.',
+        path: 'answers.$name',
+      );
     }
+    final answer = raw.cast<String, Object?>();
+    final type = answer['type'];
+    if (type is! String) {
+      throw ApiResponseValidationError(
+        'Answer "$name" has no string `type`.',
+        path: 'answers.$name.type',
+      );
+    }
+    if (!knownAnswerTypes.contains(type)) {
+      logger.warning(
+        'Ignoring answer "$name" with unrecognized type "$type". Upgrade '
+        'the SDK to read it, or use httpResponse.bodyBytes for the raw '
+        'payload.',
+      );
+      continue;
+    }
+    final question = questions[name];
+    if (question == null) {
+      logger.warning('Ignoring answer "$name", which no question requested.');
+      continue;
+    }
+    answers[name] = question.decodeAnswer(answer, name);
   }
 
   final namesByQuestion = Map<Question<Answer>, List<String>>.identity();

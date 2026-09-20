@@ -220,6 +220,28 @@ void main() {
       );
     });
 
+    test('rejects a body with no answers object', () {
+      // Accepting it silently would surface later as an ArgumentError from
+      // `get()` blaming the caller's question handle.
+      expect(
+        () => decode(override: {'model': 'jev-latest'}),
+        throwsA(
+          isA<ApiResponseValidationError>().having(
+            (e) => e.path,
+            'path',
+            'answers',
+          ),
+        ),
+      );
+    });
+
+    test('rejects a non-object answers field', () {
+      expect(
+        () => decode(override: {'model': 'jev-latest', 'answers': <Object?>[]}),
+        throwsA(isA<ApiResponseValidationError>()),
+      );
+    });
+
     test('rejects a missing model', () {
       expect(
         () => decode(

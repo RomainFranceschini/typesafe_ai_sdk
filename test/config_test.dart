@@ -100,6 +100,33 @@ void main() {
       expect(() => resolve(apiKey: '   '), throwsA(isA<TypeSafeError>()));
     });
 
+    test('trims an explicitly passed API key', () {
+      // An untrimmed key is an invalid HTTP header value, which `dart:io`
+      // would reject much later as a retried connection error.
+      expect(resolve(apiKey: ' sk-abc\n').apiKey, 'sk-abc');
+    });
+
+    test('rejects a baseUrl carrying a query string', () {
+      // Paths are appended as text, so the query would swallow them.
+      expect(
+        () => resolve(apiKey: 'k', baseUrl: 'https://api.example/?x=1'),
+        throwsA(
+          isA<TypeSafeError>().having(
+            (e) => e.message,
+            'message',
+            contains('query'),
+          ),
+        ),
+      );
+    });
+
+    test('rejects a baseUrl carrying a fragment', () {
+      expect(
+        () => resolve(apiKey: 'k', baseUrl: 'https://api.example/#frag'),
+        throwsA(isA<TypeSafeError>()),
+      );
+    });
+
     test('rejects a non-positive timeout', () {
       expect(
         () => resolve(apiKey: 'k', timeout: Duration.zero),

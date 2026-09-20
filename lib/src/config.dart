@@ -26,8 +26,10 @@ const String defaultModelName = 'jev-latest';
 /// The per-attempt timeout used when none is configured.
 const Duration defaultTimeout = Duration(seconds: 10);
 
+final RegExp _trailingSlashes = RegExp(r'/+$');
+
 String _stripTrailingSlashes(String url) =>
-    url.replaceFirst(RegExp(r'/+$'), '');
+    url.replaceFirst(_trailingSlashes, '');
 
 /// Client settings with precedence and validation already applied.
 final class ResolvedConfig {
@@ -67,14 +69,18 @@ final class ResolvedConfig {
       );
     }
 
-    final key = apiKey ?? readEnv(EnvVars.apiKey);
+    // Trimmed before use: a key with a trailing newline is a valid header
+    // value to this SDK but not to `dart:io`, which would reject it far from
+    // here as a retried connection error. Keys read from the environment are
+    // trimmed by the platform shim, so this keeps both paths identical.
+    final key = (apiKey ?? readEnv(EnvVars.apiKey))?.trim();
     if (key == null) {
       throw TypeSafeError(
         'No API key was provided. Pass `apiKey` to the TypeSafeClient '
         'constructor or set the ${EnvVars.apiKey} environment variable.',
       );
     }
-    if (key.trim().isEmpty) {
+    if (key.isEmpty) {
       throw TypeSafeError('`apiKey` must not be empty or whitespace-only.');
     }
 
@@ -140,6 +146,15 @@ final class ResolvedConfig {
       if (uri.scheme != 'http' && uri.scheme != 'https') {
         throw TypeSafeError(
           '`baseUrl` must use http or https scheme. '
+          'Received: "$baseUrl"',
+        );
+      }
+      // Request paths are appended as text, so a query or fragment here would
+      // swallow the API path: `https://host/?x=1` + `/v1/systemone` parses as
+      // the site root with the path buried in the query string.
+      if (uri.hasQuery || uri.hasFragment) {
+        throw TypeSafeError(
+          '`baseUrl` must not carry a query string or fragment. '
           'Received: "$baseUrl"',
         );
       }

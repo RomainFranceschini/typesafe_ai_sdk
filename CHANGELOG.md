@@ -34,6 +34,30 @@ Breaking: the `ApiError` hierarchy now takes named constructor parameters.
   subtraction, so a clock adjustment can no longer report a negative duration
 - Added a direct dependency on `package:collection` for deep equality
 
+Fixes from a full-codebase review.
+
+- `TypeSafeClient(logger: Logger.root)` no longer throws: a root parent now
+  yields children under `typesafe_ai_sdk`, and a `Logger.detached` parent is
+  used directly rather than silently rerouting records to the global hierarchy
+- An oversized `Retry-After` or `retry-after-ms` value is clamped instead of
+  overflowing into a negative delay that retried with no backoff at all;
+  exponential backoff is likewise capped past attempt 63
+- A plain-text error body is truncated in `ApiError.message` like a structured
+  one, instead of reaching `toString()` and the logs in full
+- An error response body is scrubbed of the API key before it is logged or
+  folded into `ApiError`, in case the server echoes the request back
+- `baseUrl` may no longer carry a query string or fragment, which would have
+  swallowed the request path and sent requests to the site root
+- An explicitly passed `apiKey` is trimmed, matching keys read from the
+  environment; an untrimmed one failed later as a retried connection error
+- A response with a missing or non-object `answers` field now raises
+  `ApiResponseValidationError`, like a missing `model`, instead of surfacing
+  later as an `ArgumentError` from `SystemOneResponse.get`
+- `ChoiceAnswer.probabilities` and `ScoreAnswer.legend`/`probabilities` are
+  unmodifiable, like every other collection the SDK hands out
+- `avoid_print` is now enforced in `lib/`; per-request `INFO` logs are built
+  lazily, and a request that never connects logs its terminal outcome
+
 ## 0.1.0
 
 Initial release. An unofficial Dart port of the TypeSafe AI JavaScript SDK

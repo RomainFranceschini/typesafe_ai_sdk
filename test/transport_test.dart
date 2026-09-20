@@ -365,7 +365,9 @@ void main() {
       httpClient: MockClient((_) async {
         calls++;
         return calls < 2
-            ? http.Response('server exploded', 500)
+            // Echoing the request back is what some gateways do on an auth
+            // failure, and it is the only way this test can observe a leak.
+            ? http.Response('{"error":"invalid key sk-secret-key-value"}', 500)
             : http.Response('{}', 200);
       }),
       baseUrl: 'https://api.example',
@@ -383,5 +385,43 @@ void main() {
     final logged = capture.records.map((r) => r.message).join('\n');
     expect(logged, isNot(contains('sk-secret-key-value')));
     expect(logged, contains('***'));
+  });
+
+  test('never carries the API key into the thrown error', () async {
+    final capture = LogCapture('transport');
+    addTearDown(capture.cancel);
+    final transport = Transport(
+      httpClient: MockClient(
+        (_) async =>
+            http.Response('{"error":"invalid key sk-secret-key-value"}', 401),
+      ),
+      baseUrl: 'https://api.example',
+      apiKey: 'sk-secret-key-value',
+      defaultHeaders: const {},
+      logger: capture.logger,
+      retry: RetryPolicy(),
+      timeout: const Duration(seconds: 5),
+      random: _ZeroRandom(),
+      sleep: (duration) async {},
+      runtime: 'dart/test (test)',
+      browser: false,
+    );
+    await expectLater(
+      transport.send('GET', '/v1/models'),
+      throwsA(
+        isA<ApiError>()
+            .having(
+              (e) => e.message,
+              'message',
+              isNot(contains('sk-secret-key-value')),
+            )
+            .having((e) => e.message, 'message', contains('***'))
+            .having(
+              (e) => '${e.body}',
+              'body',
+              isNot(contains('sk-secret-key-value')),
+            ),
+      ),
+    );
   });
 }

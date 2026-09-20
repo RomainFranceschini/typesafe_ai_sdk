@@ -1,3 +1,4 @@
+import 'package:logging/logging.dart';
 import 'package:test/test.dart';
 import 'package:typesafe_ai_sdk/src/logging.dart';
 
@@ -35,6 +36,38 @@ void main() {
         'Authorization': 'Bearer sk-abcdefghijkl',
       });
       expect(redacted['Authorization'], 'Bearer ***ijkl');
+    });
+  });
+
+  group('childLogger', () {
+    test('puts a root parent under the SDK namespace rather than throwing', () {
+      // `Logger.root.fullName` is empty, and a logger name may not start with
+      // a `.`, so composing one would throw before a single request is sent.
+      final child = childLogger(Logger.root, 'transport');
+      expect(child.fullName, '$sdkLoggerName.transport');
+
+      final records = <LogRecord>[];
+      final subscription = Logger.root.onRecord.listen(records.add);
+      addTearDown(subscription.cancel);
+      child.info('reaches the root listener');
+      expect(records.single.message, 'reaches the root listener');
+    });
+
+    test('returns a detached parent, which can have no children', () {
+      final detached = Logger.detached('detached.parent')..level = Level.ALL;
+      final records = <LogRecord>[];
+      final subscription = detached.onRecord.listen(records.add);
+      addTearDown(subscription.cancel);
+
+      childLogger(detached, 'transport').info('stays with the listener');
+      expect(records.single.message, 'stays with the listener');
+    });
+
+    test('nests under a named parent', () {
+      expect(
+        childLogger(Logger('app.sdk'), 'transport').fullName,
+        'app.sdk.transport',
+      );
     });
   });
 }

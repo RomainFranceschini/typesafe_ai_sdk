@@ -3,11 +3,28 @@ library;
 
 import 'dart:math';
 
-final Set<int> _defaultRetryStatuses = {
+final Set<int> _defaultRetryStatuses = Set.unmodifiable({
   408,
   429,
   for (var status = 500; status < 600; status++) status,
-};
+});
+
+/// The longest server-requested delay this SDK will represent, about a year.
+///
+/// [Duration] holds microseconds in a signed 64-bit integer, so converting a
+/// large enough millisecond count wraps it into a *negative* delay, which
+/// would pass the [RetryPolicy.maxRetryAfter] check and retry with no wait at
+/// all. Anything beyond this is clamped, and the clamp is far past any
+/// sensible [RetryPolicy.maxRetryAfter], so it falls back to backoff.
+const int _maxDelayMillis = 365 * 24 * 60 * 60 * 1000;
+
+Duration? _delayFromMillis(num millis) {
+  if (!millis.isFinite || millis < 0) return null;
+  if (millis > _maxDelayMillis) {
+    return const Duration(milliseconds: _maxDelayMillis);
+  }
+  return Duration(milliseconds: millis.round());
+}
 
 /// Retry configuration.
 ///
@@ -25,7 +42,14 @@ final class RetryPolicy {
     this.maxRetryAfter = const Duration(seconds: 60),
     this.retryConnectionErrors = true,
     this.retryTimeouts = true,
-  }) : httpStatuses = Set.unmodifiable(httpStatuses ?? _defaultRetryStatuses);
+  }) : httpStatuses =
+           httpStatuses == null ||
+               identical(httpStatuses, _defaultRetryStatuses)
+           // Already unmodifiable and never exposed for mutation, so the
+           // defaults are shared rather than copied on every construction —
+           // including the per-call `copyWith` the client documents.
+           ? _defaultRetryStatuses
+           : Set.unmodifiable(httpStatuses);
 
   /// Maximum retries after the initial attempt; `0` disables retries.
   final int maxRetries;
@@ -69,15 +93,17 @@ final class RetryPolicy {
   }) {
     if (respectRetryAfter && headers != null) {
       final serverDelay = parseRetryAfter(headers);
-      if (serverDelay != null && serverDelay <= maxRetryAfter) {
+      if (serverDelay != null &&
+          !serverDelay.isNegative &&
+          serverDelay <= maxRetryAfter) {
         return serverDelay;
       }
     }
-    final exponential = backoffInitial.inMilliseconds * pow(2, attempt);
-    final capped = min(
-      exponential.toDouble(),
-      backoffMax.inMilliseconds.toDouble(),
-    );
+    // `pow(2.0, …)`, not `pow(2, …)`: an integer power wraps past attempt 63
+    // and would cap to a zero or negative delay, the same failure the
+    // `Retry-After` clamp above guards against.
+    final exponential = backoffInitial.inMilliseconds * pow(2.0, attempt);
+    final capped = min(exponential, backoffMax.inMilliseconds.toDouble());
     final jittered = capped * (1 - random.nextDouble() * backoffJitter);
     return Duration(milliseconds: jittered.round());
   }
@@ -177,8 +203,9 @@ Duration? parseRetryAfter(Map<String, String> headers, {DateTime? now}) {
   final millis = headers['retry-after-ms'];
   if (millis != null) {
     final parsed = num.tryParse(millis.trim());
-    if (parsed != null && parsed.isFinite && parsed >= 0) {
-      return Duration(milliseconds: parsed.round());
+    if (parsed != null) {
+      final delay = _delayFromMillis(parsed);
+      if (delay != null) return delay;
     }
     // Fall through to retry-after if retry-after-ms is invalid.
   }
@@ -188,9 +215,7 @@ Duration? parseRetryAfter(Map<String, String> headers, {DateTime? now}) {
 
   final seconds = num.tryParse(raw.trim());
   if (seconds != null && seconds.isFinite) {
-    return seconds >= 0
-        ? Duration(milliseconds: (seconds * 1000).round())
-        : null;
+    return seconds >= 0 ? _delayFromMillis(seconds * 1000) : null;
   }
 
   final date = parseHttpDate(raw);

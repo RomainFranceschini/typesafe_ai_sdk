@@ -83,15 +83,21 @@ class ApiError extends TypeSafeError {
   /// The request identifier, or `null` when the API did not send one.
   final String? requestId;
 
+  /// Truncates text taken from a response body.
+  ///
+  /// Applies to every body-derived message, not just the raw fallback: a
+  /// plain-text body — a proxy's HTML error page, a stack trace — is returned
+  /// whole by [_extractMessage], and would otherwise reach `toString()` and
+  /// the logs in full.
+  static String _truncate(String text) => text.length > _maxRawBodyInMessage
+      ? '${text.substring(0, _maxRawBodyInMessage)}…'
+      : text;
+
   static String _describe(int status, Object? body) {
     final detail = _extractMessage(body);
-    if (detail != null) return '$status $detail';
+    if (detail != null) return '$status ${_truncate(detail)}';
     if (body == null) return '$status status code (no body)';
-    final raw = body is String ? body : body.toString();
-    if (raw.length > _maxRawBodyInMessage) {
-      return '$status ${raw.substring(0, _maxRawBodyInMessage)}…';
-    }
-    return '$status $raw';
+    return '$status ${_truncate(body is String ? body : body.toString())}';
   }
 
   /// Creates the error subclass matching [status].

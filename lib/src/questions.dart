@@ -285,14 +285,14 @@ final class Choice<L extends Object> extends Question<ChoiceAnswer<L>> {
     return ChoiceAnswer<L>(
       choice: _decode(raw, name, 'choice'),
       confidence: _requireDouble(json, 'confidence', name),
-      probabilities: {
+      probabilities: Map.unmodifiable({
         for (final entry in probabilities.entries)
           _decode(entry.key, name, 'probabilities'): _asDouble(
             entry.value,
             name,
             'probabilities["${entry.key}"]',
           ),
-      },
+      }),
     );
   }
 }
@@ -410,7 +410,9 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
       }
       result[_levelAt(index, name, field)] = convert(entry.value, entry.key);
     }
-    return result;
+    // Unmodifiable: the answer derives `==` and `hashCode` from this map, so
+    // mutating it after the fact would break lookups.
+    return Map.unmodifiable(result);
   }
 
   @override

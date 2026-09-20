@@ -14,8 +14,22 @@ Logger get defaultLogger => Logger(sdkLoggerName);
 
 /// A child of [parent] named [suffix], so records can be filtered by
 /// subsystem.
-Logger childLogger(Logger parent, String suffix) =>
-    Logger('${parent.fullName}.$suffix');
+///
+/// [Logger.root] has an empty name, and a name may not start with a `.`, so a
+/// root parent yields a child under the SDK's own namespace, which still
+/// propagates to the root. A detached logger can have no children at all —
+/// `Logger('$sdkLoggerName.transport')` would attach to the global hierarchy
+/// instead, and the detached listener would never see a record — so a
+/// detached parent is returned as-is.
+Logger childLogger(Logger parent, String suffix) {
+  final fullName = parent.fullName;
+  if (fullName.isEmpty) return Logger('$sdkLoggerName.$suffix');
+  if (parent.parent == null) return parent;
+  return Logger('$fullName.$suffix');
+}
+
+/// Hoisted: [_redactKey] runs once per credential header per logged request.
+final RegExp _whitespace = RegExp(r'\s');
 
 const Set<String> _keyHeaders = {
   'authorization',
@@ -28,7 +42,7 @@ const Set<String> _opaqueHeaders = {'cookie', 'set-cookie'};
 /// Masks a credential, keeping its scheme and the last four characters of
 /// secrets longer than eight.
 String _redactKey(String value) {
-  final separator = value.indexOf(RegExp(r'\s'));
+  final separator = value.indexOf(_whitespace);
   final scheme = separator == -1 ? null : value.substring(0, separator);
   final secret = separator == -1
       ? value

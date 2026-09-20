@@ -106,6 +106,14 @@ void main() {
       );
     });
 
+    test('truncates a long plain-text body to 200 characters', () {
+      // A plain-text body is returned whole by the message extractor, so it
+      // must be truncated on the way into the message like any other.
+      final error = ApiError.fromResponse(500, 'A' * 5000, {});
+      expect(error.message.length, 4 + 200 + 1);
+      expect(error.message, endsWith('…'));
+    });
+
     test('truncates a long raw body to 200 characters', () {
       final error = ApiError.fromResponse(400, {'unrelated': 'x' * 500}, {});
       // '400 ' + 200 characters + the ellipsis

@@ -110,30 +110,38 @@ final class Transport {
           attemptTimeout,
         );
       } on ApiConnectionError catch (error) {
-        if (retriesLeft <= 0 || !_shouldRetryError(error, policy)) rethrow;
-        await _backOff(
-          tag,
-          attempt,
-          retriesLeft,
-          _scrub(error.message),
-          null,
-          policy,
-        );
+        final elapsed = (stopwatch..stop()).elapsedMilliseconds;
+        final reason = _scrub(error.message);
+        if (retriesLeft <= 0 || !_shouldRetryError(error, policy)) {
+          // The terminal outcome, which the retry log below never reports:
+          // without this, a request that fails to connect on every attempt
+          // goes silent at INFO instead of closing out its transcript.
+          _logger.info(() => '$tag <- failed in ${elapsed}ms: $reason');
+          rethrow;
+        }
+        await _backOff(tag, attempt, retriesLeft, reason, null, policy);
         continue;
       }
 
       final elapsed = (stopwatch..stop()).elapsedMilliseconds;
       final requestId = response.headers[requestIdHeader];
+      // A closure, like the FINE calls: the SDK installs no handler, so these
+      // strings are usually built only to be discarded.
       _logger.info(
-        '$tag <- ${response.statusCode} in ${elapsed}ms'
-        '${requestId == null ? '' : ' (request $requestId)'}',
+        () =>
+            '$tag <- ${response.statusCode} in ${elapsed}ms'
+            '${requestId == null ? '' : ' (request $requestId)'}',
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return response;
       }
 
-      final errorBody = parseBody(response.bodyBytes);
+      // Scrubbed before it is logged or folded into the error message: a
+      // server that echoes the request back — some gateways quote the
+      // offending header in a 401 — would otherwise put the API key in the
+      // transcript and in `ApiError.message`.
+      final errorBody = _scrubBody(parseBody(response.bodyBytes));
       _logger.fine(() => '$tag <- error body $errorBody');
       final error = ApiError.fromResponse(
         response.statusCode,
@@ -190,6 +198,19 @@ final class Transport {
   /// for the one place the raw key touches request construction.
   String _scrub(String message) => message.replaceAll(_apiKey, '***');
 
+  /// [_scrub] applied to every string inside a parsed response body.
+  ///
+  /// Only runs on the error path, where the body is small and already being
+  /// rebuilt into an exception.
+  Object? _scrubBody(Object? value) => switch (value) {
+    final String text => _scrub(text),
+    final List<Object?> items => [for (final item in items) _scrubBody(item)],
+    final Map<Object?, Object?> map => {
+      for (final entry in map.entries) entry.key: _scrubBody(entry.value),
+    },
+    _ => value,
+  };
+
   bool _shouldRetryError(ApiConnectionError error, RetryPolicy policy) =>
       error is ApiTimeoutError
       ? policy.retryTimeouts
@@ -209,8 +230,9 @@ final class Transport {
       random: _random,
     );
     _logger.info(
-      '$tag retrying in ${delay.inMilliseconds}ms '
-      '(retry ${attempt + 1}/${attempt + retriesLeft}) after $reason',
+      () =>
+          '$tag retrying in ${delay.inMilliseconds}ms '
+          '(retry ${attempt + 1}/${attempt + retriesLeft}) after $reason',
     );
     await _sleep(delay);
   }

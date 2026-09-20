@@ -63,6 +63,20 @@ void main() {
       expect(parseRetryAfter({'retry-after': '3'}), const Duration(seconds: 3));
     });
 
+    test('clamps an oversized retry-after instead of overflowing', () {
+      // (1e13 * 1000).round() saturates at the int64 maximum, and Duration
+      // multiplies by another 1000 for microseconds, wrapping negative.
+      final delay = parseRetryAfter({'retry-after': '10000000000000'});
+      expect(delay!.isNegative, isFalse);
+      expect(delay, const Duration(days: 365));
+    });
+
+    test('clamps an oversized retry-after-ms instead of overflowing', () {
+      final delay = parseRetryAfter({'retry-after-ms': '99999999999999999999'});
+      expect(delay!.isNegative, isFalse);
+      expect(delay, const Duration(days: 365));
+    });
+
     test('reads retry-after as an HTTP date', () {
       final now = DateTime.utc(2026, 9, 19, 12, 0, 0);
       expect(
@@ -147,6 +161,27 @@ void main() {
       );
       expect(
         policy.delayFor(attempt: 9, random: random),
+        const Duration(seconds: 5),
+      );
+    });
+
+    test('falls back to backoff when the server delay overflows', () {
+      // A negative delay would slip past the maxRetryAfter check and retry
+      // with no wait at all.
+      expect(
+        RetryPolicy().delayFor(
+          attempt: 0,
+          random: _FixedRandom(0),
+          headers: {'retry-after': '10000000000000'},
+        ),
+        const Duration(milliseconds: 500),
+      );
+    });
+
+    test('stays capped at backoffMax for a very deep attempt', () {
+      // An integer 2^attempt wraps past attempt 63, capping to a zero delay.
+      expect(
+        RetryPolicy().delayFor(attempt: 70, random: _FixedRandom(0)),
         const Duration(seconds: 5),
       );
     });
