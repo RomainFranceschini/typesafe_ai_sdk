@@ -6,6 +6,7 @@ import 'package:logging/logging.dart';
 
 import 'answers.dart';
 import 'config.dart';
+import 'errors.dart';
 import 'json.dart';
 import 'logging.dart';
 import 'questions.dart';
@@ -121,11 +122,9 @@ final class TypeSafeClient {
     RetryPolicy? retry,
     Map<String, String>? headers,
   }) async {
-    validateQuestions(questions);
-    // Encoded once here purely to fail with the field name the caller knows.
-    // The transport re-encodes the whole body; for large states that is a
-    // second pass, which is a fair trade for an actionable error message.
-    encodeBody(state, 'state');
+    if (questions.isEmpty) {
+      throw TypeSafeError('At least one question is required.');
+    }
 
     final body = <String, Object?>{
       'state': state,
@@ -145,10 +144,7 @@ final class TypeSafeClient {
     );
 
     return decodeSystemOne(
-      body: parseBody(
-        readBodySafely(response),
-        response.headers['content-type'],
-      ),
+      body: parseBody(readBodySafely(response)),
       questions: questions,
       httpResponse: response,
       logger: _logger,

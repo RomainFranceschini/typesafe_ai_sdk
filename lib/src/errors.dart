@@ -62,9 +62,13 @@ String? _describeValidationErrors(List<Object?> errors) {
 /// An unsuccessful HTTP response from the API.
 class ApiError extends TypeSafeError {
   /// Creates an error for a non-2xx [statusCode].
-  ApiError(this.statusCode, this.body, this.headers, {String? message})
-    : requestId = headers[requestIdHeader],
-      super(message ?? _describe(statusCode, body));
+  ApiError({
+    required this.statusCode,
+    required this.body,
+    required this.headers,
+    String? message,
+  }) : requestId = headers[requestIdHeader],
+       super(message ?? _describe(statusCode, body));
 
   /// The HTTP response status code.
   final int statusCode;
@@ -95,61 +99,92 @@ class ApiError extends TypeSafeError {
     int status,
     Object? body,
     Map<String, String> headers,
-  ) {
-    switch (status) {
-      case 400:
-        return BadRequestError(status, body, headers);
-      case 401:
-        return AuthenticationError(status, body, headers);
-      case 403:
-        return PermissionDeniedError(status, body, headers);
-      case 404:
-        return NotFoundError(status, body, headers);
-      case 422:
-        return UnprocessableEntityError(status, body, headers);
-      case 429:
-        return RateLimitError(status, body, headers);
-    }
-    if (status >= 500) return InternalServerError(status, body, headers);
-    return ApiError(status, body, headers);
-  }
+  ) => switch (status) {
+    400 => BadRequestError(statusCode: status, body: body, headers: headers),
+    401 => AuthenticationError(
+      statusCode: status,
+      body: body,
+      headers: headers,
+    ),
+    403 => PermissionDeniedError(
+      statusCode: status,
+      body: body,
+      headers: headers,
+    ),
+    404 => NotFoundError(statusCode: status, body: body, headers: headers),
+    422 => UnprocessableEntityError(
+      statusCode: status,
+      body: body,
+      headers: headers,
+    ),
+    429 => RateLimitError(statusCode: status, body: body, headers: headers),
+    >= 500 => InternalServerError(
+      statusCode: status,
+      body: body,
+      headers: headers,
+    ),
+    _ => ApiError(statusCode: status, body: body, headers: headers),
+  };
 }
 
 /// HTTP 400: the request is invalid.
 class BadRequestError extends ApiError {
   /// Creates an HTTP 400 error.
-  BadRequestError(super.statusCode, super.body, super.headers);
+  BadRequestError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  });
 }
 
 /// HTTP 401: authentication failed.
 class AuthenticationError extends ApiError {
   /// Creates an HTTP 401 error.
-  AuthenticationError(super.statusCode, super.body, super.headers);
+  AuthenticationError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  });
 }
 
 /// HTTP 403: access is denied.
 class PermissionDeniedError extends ApiError {
   /// Creates an HTTP 403 error.
-  PermissionDeniedError(super.statusCode, super.body, super.headers);
+  PermissionDeniedError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  });
 }
 
 /// HTTP 404: the resource was not found.
 class NotFoundError extends ApiError {
   /// Creates an HTTP 404 error.
-  NotFoundError(super.statusCode, super.body, super.headers);
+  NotFoundError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  });
 }
 
 /// HTTP 422: request validation failed.
 class UnprocessableEntityError extends ApiError {
   /// Creates an HTTP 422 error.
-  UnprocessableEntityError(super.statusCode, super.body, super.headers);
+  UnprocessableEntityError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  });
 }
 
 /// HTTP 429: the rate limit was exceeded.
 class RateLimitError extends ApiError {
   /// Creates an HTTP 429 error, reading the server's retry delay.
-  RateLimitError(super.statusCode, super.body, super.headers)
-    : retryAfter = parseRetryAfter(headers);
+  RateLimitError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  }) : retryAfter = parseRetryAfter(headers);
 
   /// The server's requested retry delay, when it sent a valid one.
   final Duration? retryAfter;
@@ -158,7 +193,11 @@ class RateLimitError extends ApiError {
 /// HTTP 5xx: the server failed to handle the request.
 class InternalServerError extends ApiError {
   /// Creates an HTTP 5xx error.
-  InternalServerError(super.statusCode, super.body, super.headers);
+  InternalServerError({
+    required super.statusCode,
+    required super.body,
+    required super.headers,
+  });
 }
 
 /// The request could not be delivered or the response could not be read.

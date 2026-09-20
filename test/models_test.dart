@@ -129,4 +129,48 @@ void main() {
     expect(result, hasLength(1));
     expect(result.single.name, 'jev-latest');
   });
+
+  group('ModelCard value semantics', () {
+    const card = ModelCard(
+      name: 'jev-1',
+      description: 'd',
+      releaseDate: '2026-01-01',
+    );
+
+    test('compares by every field', () {
+      expect(
+        card,
+        const ModelCard(
+          name: 'jev-1',
+          description: 'd',
+          releaseDate: '2026-01-01',
+        ),
+      );
+      expect(
+        card.hashCode,
+        const ModelCard(
+          name: 'jev-1',
+          description: 'd',
+          releaseDate: '2026-01-01',
+        ).hashCode,
+      );
+      expect(
+        card,
+        isNot(
+          const ModelCard(
+            name: 'jev-2',
+            description: 'd',
+            releaseDate: '2026-01-01',
+          ),
+        ),
+      );
+    });
+
+    test('toString renders the fields', () {
+      expect(
+        card.toString(),
+        'ModelCard(name: jev-1, description: d, releaseDate: 2026-01-01)',
+      );
+    });
+  });
 }

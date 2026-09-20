@@ -32,6 +32,20 @@ final class Usage {
 
   /// Output tokens used, or `null` when the API did not report it.
   final int? outputTokens;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Usage &&
+          inputTokens == other.inputTokens &&
+          outputTokens == other.outputTokens;
+
+  @override
+  int get hashCode => Object.hash(inputTokens, outputTokens);
+
+  @override
+  String toString() =>
+      'Usage(inputTokens: $inputTokens, outputTokens: $outputTokens)';
 }
 
 /// Answers to a System One request, with model and usage metadata.

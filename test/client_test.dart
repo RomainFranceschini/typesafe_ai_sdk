@@ -7,6 +7,11 @@ import 'package:typesafe_ai_sdk/typesafe_ai_sdk.dart';
 
 enum _Tone { calm, frustrated, angry }
 
+class _Unencodable {
+  @override
+  String toString() => 'unencodable value';
+}
+
 class _TrackingClient extends http.BaseClient {
   _TrackingClient(this._handler);
   final MockClient _handler;
@@ -154,15 +159,37 @@ void main() {
     client.close();
   });
 
-  test('rejects state that cannot be encoded, naming the field', () async {
+  test('rejects state that cannot be encoded, naming the value', () async {
     final client = clientFor((_) async => http.Response('{}', 200));
     await expectLater(
-      client.systemOne(state: Object(), questions: {'a': Noul()}),
+      client.systemOne(state: _Unencodable(), questions: {'a': Noul()}),
       throwsA(
         isA<TypeSafeError>().having(
           (e) => e.message,
           'message',
-          contains('state'),
+          allOf(contains('_Unencodable'), contains('not JSON-encodable')),
+        ),
+      ),
+    );
+    expect(requests, isEmpty);
+    client.close();
+  });
+
+  test('rejects unencodable instructions, not just state', () async {
+    // The body is encoded once, so the error names the offending value rather
+    // than guessing at a field: `instructions` and criteria descriptions take
+    // arbitrary caller objects just as `state` does.
+    final client = clientFor((_) async => http.Response('{}', 200));
+    await expectLater(
+      client.systemOne(
+        state: 'fine',
+        questions: {'a': Noul(instructions: _Unencodable())},
+      ),
+      throwsA(
+        isA<TypeSafeError>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('_Unencodable'), contains('not JSON-encodable')),
         ),
       ),
     );

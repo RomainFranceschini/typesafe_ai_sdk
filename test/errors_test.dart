@@ -147,7 +147,11 @@ void main() {
 
     test('toString names the concrete subclass', () {
       expect(
-        NotFoundError(404, null, const {}).toString(),
+        NotFoundError(
+          statusCode: 404,
+          body: null,
+          headers: const {},
+        ).toString(),
         startsWith('NotFoundError: '),
       );
     });

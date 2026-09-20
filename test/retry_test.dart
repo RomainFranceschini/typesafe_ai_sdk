@@ -31,13 +31,13 @@ void main() {
 
     test('retryable statuses are 408, 429, and 5xx', () {
       final policy = RetryPolicy();
-      expect(isRetryableStatus(408, policy), isTrue);
-      expect(isRetryableStatus(429, policy), isTrue);
-      expect(isRetryableStatus(500, policy), isTrue);
-      expect(isRetryableStatus(599, policy), isTrue);
-      expect(isRetryableStatus(400, policy), isFalse);
-      expect(isRetryableStatus(404, policy), isFalse);
-      expect(isRetryableStatus(600, policy), isFalse);
+      expect(policy.retriesStatus(408), isTrue);
+      expect(policy.retriesStatus(429), isTrue);
+      expect(policy.retriesStatus(500), isTrue);
+      expect(policy.retriesStatus(599), isTrue);
+      expect(policy.retriesStatus(400), isFalse);
+      expect(policy.retriesStatus(404), isFalse);
+      expect(policy.retriesStatus(600), isFalse);
     });
 
     test('copyWith overrides only the named fields', () {
@@ -129,44 +129,55 @@ void main() {
     });
   });
 
-  group('retryDelay', () {
+  group('RetryPolicy.delayFor', () {
     test('doubles each attempt and caps at backoffMax', () {
       final policy = RetryPolicy();
       final random = _FixedRandom(0);
       expect(
-        retryDelay(0, null, policy, random),
+        policy.delayFor(attempt: 0, random: random),
         const Duration(milliseconds: 500),
       );
       expect(
-        retryDelay(1, null, policy, random),
+        policy.delayFor(attempt: 1, random: random),
         const Duration(milliseconds: 1000),
       );
       expect(
-        retryDelay(2, null, policy, random),
+        policy.delayFor(attempt: 2, random: random),
         const Duration(milliseconds: 2000),
       );
-      expect(retryDelay(9, null, policy, random), const Duration(seconds: 5));
+      expect(
+        policy.delayFor(attempt: 9, random: random),
+        const Duration(seconds: 5),
+      );
     });
 
     test('subtracts jitter as a fraction of the delay', () {
       final policy = RetryPolicy();
       // 500ms * (1 - 1.0 * 0.25) == 375ms
       expect(
-        retryDelay(0, null, policy, _FixedRandom(1)),
+        policy.delayFor(attempt: 0, random: _FixedRandom(1)),
         const Duration(milliseconds: 375),
       );
     });
 
     test('honors a server delay within the cap', () {
       expect(
-        retryDelay(0, {'retry-after': '2'}, RetryPolicy(), _FixedRandom(0)),
+        RetryPolicy().delayFor(
+          attempt: 0,
+          headers: {'retry-after': '2'},
+          random: _FixedRandom(0),
+        ),
         const Duration(seconds: 2),
       );
     });
 
     test('falls back to backoff when the server delay exceeds the cap', () {
       expect(
-        retryDelay(0, {'retry-after': '120'}, RetryPolicy(), _FixedRandom(0)),
+        RetryPolicy().delayFor(
+          attempt: 0,
+          headers: {'retry-after': '120'},
+          random: _FixedRandom(0),
+        ),
         const Duration(milliseconds: 500),
       );
     });
@@ -174,7 +185,11 @@ void main() {
     test('ignores server delays when respectRetryAfter is false', () {
       final policy = RetryPolicy().copyWith(respectRetryAfter: false);
       expect(
-        retryDelay(0, {'retry-after': '2'}, policy, _FixedRandom(0)),
+        policy.delayFor(
+          attempt: 0,
+          headers: {'retry-after': '2'},
+          random: _FixedRandom(0),
+        ),
         const Duration(milliseconds: 500),
       );
     });

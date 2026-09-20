@@ -238,4 +238,29 @@ void main() {
       );
     });
   });
+
+  group('Usage value semantics', () {
+    test('compares by token counts', () {
+      expect(
+        const Usage(inputTokens: 1, outputTokens: 2),
+        const Usage(inputTokens: 1, outputTokens: 2),
+      );
+      expect(
+        const Usage(inputTokens: 1, outputTokens: 2).hashCode,
+        const Usage(inputTokens: 1, outputTokens: 2).hashCode,
+      );
+      expect(
+        const Usage(inputTokens: 1, outputTokens: 2),
+        isNot(const Usage(inputTokens: 1, outputTokens: 3)),
+      );
+      expect(const Usage(), isNot(const Usage(inputTokens: 0)));
+    });
+
+    test('toString renders both counts', () {
+      expect(
+        const Usage(inputTokens: 1, outputTokens: 2).toString(),
+        'Usage(inputTokens: 1, outputTokens: 2)',
+      );
+    });
+  });
 }

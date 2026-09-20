@@ -15,28 +15,28 @@ class _NotEncodable {
 void main() {
   group('parseBody', () {
     test('returns null for an empty body', () {
-      expect(parseBody('', 'application/json'), isNull);
+      expect(parseBody(''), isNull);
     });
 
-    test('parses JSON when content-type says so', () {
-      expect(parseBody('{"a":1}', 'application/json'), {'a': 1});
+    test('parses a JSON object body', () {
+      expect(parseBody('{"a":1}'), {'a': 1});
     });
 
-    test('parses JSON even when content-type does not say so', () {
+    test('parses JSON without consulting content-type', () {
       // Proxies misreport content-type; the JS SDK is lenient here too.
-      expect(parseBody('{"a":1}', 'text/plain'), {'a': 1});
+      expect(parseBody('{"a":1}'), {'a': 1});
     });
 
     test('parses JSON when content-type is absent', () {
-      expect(parseBody('[1,2]', null), [1, 2]);
+      expect(parseBody('[1,2]'), [1, 2]);
     });
 
     test('falls back to raw text when the body is not JSON', () {
-      expect(parseBody('not json', 'application/json'), 'not json');
+      expect(parseBody('not json'), 'not json');
     });
 
     test('returns null for a body that is the literal JSON null', () {
-      expect(parseBody('null', 'application/json'), isNull);
+      expect(parseBody('null'), isNull);
     });
   });
 

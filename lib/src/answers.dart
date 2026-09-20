@@ -1,6 +1,11 @@
 /// The answers returned by System One, one per question.
 library;
 
+import 'package:collection/collection.dart';
+
+const MapEquality<Object?, Object?> _mapEquality = MapEquality();
+const ListEquality<Object?> _listEquality = ListEquality();
+
 /// An answer to a single question.
 ///
 /// This type is sealed, so a `switch` over an answer of unknown kind is
@@ -17,6 +22,16 @@ final class NoulAnswer extends Answer {
 
   /// Probability of a yes answer, from zero to one.
   final double noul;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is NoulAnswer && noul == other.noul;
+
+  @override
+  int get hashCode => noul.hashCode;
+
+  @override
+  String toString() => 'NoulAnswer($noul)';
 }
 
 /// A selected label and the probabilities across all labels.
@@ -36,6 +51,24 @@ final class ChoiceAnswer<L extends Object> extends Answer {
 
   /// Probabilities keyed by label.
   final Map<L, double> probabilities;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChoiceAnswer<L> &&
+          runtimeType == other.runtimeType &&
+          choice == other.choice &&
+          confidence == other.confidence &&
+          _mapEquality.equals(probabilities, other.probabilities);
+
+  @override
+  int get hashCode =>
+      Object.hash(choice, confidence, _mapEquality.hash(probabilities));
+
+  @override
+  String toString() =>
+      'ChoiceAnswer(choice: $choice, confidence: $confidence, '
+      'probabilities: $probabilities)';
 }
 
 /// An expected score with its rubric and probabilities.
@@ -70,4 +103,29 @@ final class ScoreAnswer<L extends Object> extends Answer {
 
   /// The discrete level closest to [score], clamped to the ends of [scale].
   L get nearestLevel => scale[score.round().clamp(0, scale.length - 1).toInt()];
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ScoreAnswer<L> &&
+          runtimeType == other.runtimeType &&
+          score == other.score &&
+          confidence == other.confidence &&
+          _mapEquality.equals(legend, other.legend) &&
+          _mapEquality.equals(probabilities, other.probabilities) &&
+          _listEquality.equals(scale, other.scale);
+
+  @override
+  int get hashCode => Object.hash(
+    score,
+    confidence,
+    _mapEquality.hash(legend),
+    _mapEquality.hash(probabilities),
+    _listEquality.hash(scale),
+  );
+
+  @override
+  String toString() =>
+      'ScoreAnswer(score: $score, confidence: $confidence, '
+      'legend: $legend, probabilities: $probabilities, scale: $scale)';
 }

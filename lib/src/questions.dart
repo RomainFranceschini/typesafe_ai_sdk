@@ -25,17 +25,21 @@ sealed class Question<A extends Answer> {
   ///
   /// [name] is the question's key in the request, used in error messages.
   A decodeAnswer(Map<String, Object?> json, String name);
+}
 
-  /// Throws unless [json] carries the answer type [expected].
-  void checkType(Map<String, Object?> json, String expected, String name) {
-    final type = json['type'];
-    if (type != expected) {
-      throw ApiResponseValidationError(
-        'Question "$name" expected a "$expected" answer but the API returned '
-        '"$type".',
-        path: 'answers.$name.type',
-      );
-    }
+/// Throws unless [json] carries the answer type [expected].
+///
+/// A free function rather than a method on [Question]: the class is sealed, so
+/// there are no external implementers to offer it to, and as a member it would
+/// surface in the public API for no caller's benefit.
+void _checkType(Map<String, Object?> json, String expected, String name) {
+  final type = json['type'];
+  if (type != expected) {
+    throw ApiResponseValidationError(
+      'Question "$name" expected a "$expected" answer but the API returned '
+      '"$type".',
+      path: 'answers.$name.type',
+    );
   }
 }
 
@@ -112,7 +116,7 @@ final class Noul extends Question<NoulAnswer> {
 
   @override
   NoulAnswer decodeAnswer(Map<String, Object?> json, String name) {
-    checkType(json, 'noul', name);
+    _checkType(json, 'noul', name);
     return NoulAnswer(_requireDouble(json, 'noul', name));
   }
 }
@@ -269,7 +273,7 @@ final class Choice<L extends Object> extends Question<ChoiceAnswer<L>> {
 
   @override
   ChoiceAnswer<L> decodeAnswer(Map<String, Object?> json, String name) {
-    checkType(json, 'choice', name);
+    _checkType(json, 'choice', name);
     final raw = json['choice'];
     if (raw is! String) {
       throw ApiResponseValidationError(
@@ -418,7 +422,7 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
 
   @override
   ScoreAnswer<L> decodeAnswer(Map<String, Object?> json, String name) {
-    checkType(json, 'score', name);
+    _checkType(json, 'score', name);
     return ScoreAnswer<L>(
       score: _requireDouble(json, 'score', name),
       confidence: _requireDouble(json, 'confidence', name),
@@ -436,15 +440,5 @@ final class Score<L extends Object> extends Question<ScoreAnswer<L>> {
       ),
       scale: scale,
     );
-  }
-}
-
-/// Throws when [questions] is empty.
-///
-/// Score rubric size is validated at construction, so this only guards the
-/// one condition that cannot be checked earlier.
-void validateQuestions(Map<String, Question<Answer>> questions) {
-  if (questions.isEmpty) {
-    throw TypeSafeError('At least one question is required.');
   }
 }

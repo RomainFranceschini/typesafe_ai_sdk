@@ -461,25 +461,6 @@ void main() {
     });
   });
 
-  group('validateQuestions', () {
-    test('rejects an empty question set', () {
-      expect(
-        () => validateQuestions({}),
-        throwsA(
-          isA<TypeSafeError>().having(
-            (e) => e.message,
-            'message',
-            contains('At least one question'),
-          ),
-        ),
-      );
-    });
-
-    test('accepts a non-empty question set', () {
-      expect(() => validateQuestions({'a': Noul()}), returnsNormally);
-    });
-  });
-
   test('a mismatched answer type is rejected', () {
     expect(
       () => Noul().decodeAnswer({'type': 'choice', 'noul': 0.5}, 'x'),

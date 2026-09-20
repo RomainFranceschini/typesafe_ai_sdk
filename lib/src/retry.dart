@@ -13,7 +13,7 @@ final Set<int> _defaultRetryStatuses = {
 ///
 /// Per-call overrides are produced with [copyWith] against the client's
 /// policy, which is itself built over these defaults.
-class RetryPolicy {
+final class RetryPolicy {
   /// Creates a retry policy, defaulting every unset field to the SDK default.
   RetryPolicy({
     this.maxRetries = 2,
@@ -54,6 +54,34 @@ class RetryPolicy {
   /// Whether to retry request timeouts.
   final bool retryTimeouts;
 
+  /// Whether this policy retries a response carrying [status].
+  bool retriesStatus(int status) => httpStatuses.contains(status);
+
+  /// The delay before a zero-based retry [attempt].
+  ///
+  /// Uses the server's requested delay when [headers] carry an allowed one,
+  /// otherwise capped exponential backoff with jitter subtracted. [random]
+  /// supplies the jitter, so tests can make the delay deterministic.
+  Duration delayFor({
+    required int attempt,
+    required Random random,
+    Map<String, String>? headers,
+  }) {
+    if (respectRetryAfter && headers != null) {
+      final serverDelay = parseRetryAfter(headers);
+      if (serverDelay != null && serverDelay <= maxRetryAfter) {
+        return serverDelay;
+      }
+    }
+    final exponential = backoffInitial.inMilliseconds * pow(2, attempt);
+    final capped = min(
+      exponential.toDouble(),
+      backoffMax.inMilliseconds.toDouble(),
+    );
+    final jittered = capped * (1 - random.nextDouble() * backoffJitter);
+    return Duration(milliseconds: jittered.round());
+  }
+
   /// Returns a copy of this policy with the named fields replaced.
   RetryPolicy copyWith({
     int? maxRetries,
@@ -80,10 +108,6 @@ class RetryPolicy {
     );
   }
 }
-
-/// Whether [policy] retries responses with [status].
-bool isRetryableStatus(int status, RetryPolicy policy) =>
-    policy.httpStatuses.contains(status);
 
 const List<String> _weekdays = [
   'Mon',
@@ -173,29 +197,4 @@ Duration? parseRetryAfter(Map<String, String> headers, {DateTime? now}) {
   if (date == null) return null;
   final remaining = date.difference(now ?? DateTime.now().toUtc());
   return remaining.isNegative ? Duration.zero : remaining;
-}
-
-/// The delay before a zero-based retry [attempt].
-///
-/// Uses an allowed server delay when present, otherwise capped exponential
-/// backoff with jitter subtracted.
-Duration retryDelay(
-  int attempt,
-  Map<String, String>? headers,
-  RetryPolicy policy,
-  Random random,
-) {
-  if (policy.respectRetryAfter && headers != null) {
-    final serverDelay = parseRetryAfter(headers);
-    if (serverDelay != null && serverDelay <= policy.maxRetryAfter) {
-      return serverDelay;
-    }
-  }
-  final exponential = policy.backoffInitial.inMilliseconds * pow(2, attempt);
-  final capped = min(
-    exponential.toDouble(),
-    policy.backoffMax.inMilliseconds.toDouble(),
-  );
-  final jittered = capped * (1 - random.nextDouble() * policy.backoffJitter);
-  return Duration(milliseconds: jittered.round());
 }

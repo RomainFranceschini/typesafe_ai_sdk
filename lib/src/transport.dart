@@ -76,8 +76,6 @@ final class Transport {
     // A path that does not start with `/` can shift `baseUrl` into the
     // userinfo component of the parsed URI (e.g. a path beginning with `@`),
     // sending the `Authorization` header to a host the caller never named.
-    // No caller reaches `send()` yet, but callers are wired in later tasks,
-    // so this is validated here rather than left to whoever adds them.
     if (!path.startsWith('/')) {
       throw TypeSafeError('`path` must start with "/", got "$path".');
     }
@@ -101,7 +99,7 @@ final class Transport {
             'body: $body',
       );
 
-      final started = DateTime.now();
+      final stopwatch = Stopwatch()..start();
       http.Response response;
       try {
         response = await _attempt(
@@ -124,7 +122,7 @@ final class Transport {
         continue;
       }
 
-      final elapsed = DateTime.now().difference(started).inMilliseconds;
+      final elapsed = (stopwatch..stop()).elapsedMilliseconds;
       final requestId = response.headers[requestIdHeader];
       _logger.info(
         '$tag <- ${response.statusCode} in ${elapsed}ms'
@@ -135,17 +133,14 @@ final class Transport {
         return response;
       }
 
-      final errorBody = parseBody(
-        readBodySafely(response),
-        response.headers['content-type'],
-      );
+      final errorBody = parseBody(readBodySafely(response));
       _logger.fine(() => '$tag <- error body $errorBody');
       final error = ApiError.fromResponse(
         response.statusCode,
         errorBody,
         response.headers,
       );
-      if (retriesLeft <= 0 || !isRetryableStatus(response.statusCode, policy)) {
+      if (retriesLeft <= 0 || !policy.retriesStatus(response.statusCode)) {
         throw error;
       }
       await _backOff(
@@ -208,7 +203,11 @@ final class Transport {
     Map<String, String>? headers,
     RetryPolicy policy,
   ) async {
-    final delay = retryDelay(attempt, headers, policy, _random);
+    final delay = policy.delayFor(
+      attempt: attempt,
+      headers: headers,
+      random: _random,
+    );
     _logger.info(
       '$tag retrying in ${delay.inMilliseconds}ms '
       '(retry ${attempt + 1}/${attempt + retriesLeft}) after $reason',

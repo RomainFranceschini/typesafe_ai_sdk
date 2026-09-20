@@ -42,19 +42,31 @@ final class ModelCard {
 
   /// The model's release date, formatted as `YYYY-MM-DD`.
   final String releaseDate;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelCard &&
+          name == other.name &&
+          description == other.description &&
+          releaseDate == other.releaseDate;
+
+  @override
+  int get hashCode => Object.hash(name, description, releaseDate);
+
+  @override
+  String toString() =>
+      'ModelCard(name: $name, description: $description, '
+      'releaseDate: $releaseDate)';
 }
 
 /// The models available to the account.
 final class Models {
-  /// Creates the resource over [_transport].
+  /// Creates the resource over [transport].
   ///
-  /// Not part of the public API. Use [TypeSafeClient.models] instead.
-  Models._(this._transport);
-
-  /// Internal constructor for use within the SDK only.
-  ///
-  /// Use [TypeSafeClient.models] to access models from user code.
-  factory Models(Transport transport) => Models._(transport);
+  /// [Transport] is not exported, so this is unreachable from user code. Read
+  /// `TypeSafeClient.models` instead.
+  Models(this._transport);
 
   final Transport _transport;
 
@@ -71,10 +83,7 @@ final class Models {
       retry: retry,
       timeout: timeout,
     );
-    final body = parseBody(
-      readBodySafely(response),
-      response.headers['content-type'],
-    );
+    final body = parseBody(readBodySafely(response));
     final models = body is Map ? body['models'] : null;
     if (models is! List) {
       throw ApiResponseValidationError(

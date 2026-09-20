@@ -18,6 +18,22 @@ SDK's own logger types.
 
 [logging]: https://pub.dev/packages/logging
 
+Breaking: the `ApiError` hierarchy now takes named constructor parameters.
+
+- `ApiError(status, body, headers)` and each subclass become
+  `ApiError(statusCode: ..., body: ..., headers: ...)`; `ApiError.fromResponse`
+  is unchanged
+- `Question.checkType` is no longer a member of the sealed `Question` class
+- Answers, `Usage`, and `ModelCard` now implement `==`, `hashCode`, and
+  `toString`, so they compare by value
+- `RetryPolicy` gained `retriesStatus` and `delayFor`, replacing the
+  library-private `isRetryableStatus` and `retryDelay` free functions
+- A request body is now encoded once instead of twice; an encoding failure
+  names the offending value rather than assuming it came from `state`
+- Request latency is measured with `Stopwatch` rather than wall-clock
+  subtraction, so a clock adjustment can no longer report a negative duration
+- Added a direct dependency on `package:collection` for deep equality
+
 ## 0.1.0
 
 Initial release. An unofficial Dart port of the TypeSafe AI JavaScript SDK
