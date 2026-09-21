@@ -232,11 +232,13 @@ void main() {
     final client = TypeSafeClient(
       apiKey: 'k',
       baseUrl: 'https://api.example/',
+      maxResponseBodyBytes: 1234,
       httpClient: MockClient((_) async => http.Response('{}', 200)),
     );
     expect(client.baseUrl, 'https://api.example');
     expect(client.defaultModel, 'jev-latest');
     expect(client.timeout, const Duration(seconds: 10));
+    expect(client.maxResponseBodyBytes, 1234);
     client.close();
   });
 }

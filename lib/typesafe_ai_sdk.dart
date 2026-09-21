@@ -9,7 +9,12 @@ library;
 export 'src/answers.dart' show Answer, ChoiceAnswer, NoulAnswer, ScoreAnswer;
 export 'src/client.dart' show TypeSafeClient;
 export 'src/config.dart'
-    show EnvVars, defaultBaseUrl, defaultModelName, defaultTimeout;
+    show
+        EnvVars,
+        defaultBaseUrl,
+        defaultMaxResponseBodyBytes,
+        defaultModelName,
+        defaultTimeout;
 export 'src/errors.dart'
     show
         ApiConnectionError,

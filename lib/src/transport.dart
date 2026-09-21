@@ -3,10 +3,12 @@ library;
 
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
+import 'config.dart';
 import 'errors.dart';
 import 'json.dart';
 import 'logging.dart';
@@ -31,6 +33,7 @@ final class Transport {
     required this._logger,
     required this.retry,
     required this.timeout,
+    this.maxResponseBodyBytes = defaultMaxResponseBodyBytes,
     Random? random,
     Future<void> Function(Duration)? sleep,
     String? runtime,
@@ -57,6 +60,9 @@ final class Transport {
 
   /// The default per-attempt timeout.
   final Duration timeout;
+
+  /// The largest response body this transport will buffer, in bytes.
+  final int maxResponseBodyBytes;
 
   int _requestCount = 0;
 
@@ -170,26 +176,92 @@ final class Transport {
     List<int>? body,
     Duration timeout,
   ) async {
-    final request = http.Request(method, url)..headers.addAll(headers);
+    final aborter = Completer<void>();
+    void abort() {
+      if (!aborter.isCompleted) aborter.complete();
+    }
+
+    final request = http.AbortableRequest(
+      method,
+      url,
+      abortTrigger: aborter.future,
+    )..headers.addAll(headers);
     if (body != null) request.bodyBytes = body;
     try {
-      // `.timeout()` abandons this future on expiry, but it does not cancel
-      // the underlying send: `package:http` has no `AbortController`
-      // equivalent, and request cancellation was deliberately left out of
-      // this SDK's design. A slow server can therefore leave up to
-      // `maxRetries + 1` requests in flight after `send()` has already
-      // thrown or returned.
       return await _httpClient
           .send(request)
-          .then(http.Response.fromStream)
-          .timeout(timeout);
-    } on TimeoutException {
-      throw ApiTimeoutError(timeout);
+          .then((response) => _readResponse(response, abort))
+          .timeout(
+            timeout,
+            onTimeout: () {
+              abort();
+              throw ApiTimeoutError(timeout);
+            },
+          );
+    } on ApiTimeoutError {
+      rethrow;
+    } on ApiResponseValidationError {
+      rethrow;
     } on http.ClientException catch (error) {
       throw ApiConnectionError(_scrub('Connection error: ${error.message}'));
     } on Exception catch (error) {
       throw ApiConnectionError(_scrub('Connection error: $error'));
+    } finally {
+      // Complete the trigger after every terminal outcome so clients do not
+      // retain pending abort listeners after a successful response.
+      abort();
     }
+  }
+
+  Future<http.Response> _readResponse(
+    http.StreamedResponse response,
+    void Function() abort,
+  ) async {
+    final declaredLength = response.contentLength;
+    if (declaredLength != null && declaredLength > maxResponseBodyBytes) {
+      // Subscribe before aborting so IOClient can cancel its underlying
+      // HttpClientResponse rather than leaving an unread socket active.
+      try {
+        final subscription = response.stream.listen(
+          null,
+          onError: (Object _, StackTrace _) {},
+        );
+        unawaited(
+          subscription.cancel().then<void>(
+            (_) {},
+            onError: (Object _, StackTrace _) {},
+          ),
+        );
+      } on Object {
+        // Cleanup is best-effort; preserve the size-limit error below.
+      }
+      abort();
+      throw ApiResponseValidationError(
+        'Response body declared $declaredLength bytes, exceeding the '
+        '$maxResponseBodyBytes-byte limit.',
+      );
+    }
+
+    final body = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      if (chunk.length > maxResponseBodyBytes - body.length) {
+        abort();
+        throw ApiResponseValidationError(
+          'Response body exceeded the $maxResponseBodyBytes-byte limit.',
+        );
+      }
+      body.add(chunk);
+    }
+
+    return http.Response.bytes(
+      body.takeBytes(),
+      response.statusCode,
+      request: response.request,
+      headers: response.headers,
+      isRedirect: response.isRedirect,
+      persistentConnection: response.persistentConnection,
+      reasonPhrase: response.reasonPhrase,
+    );
   }
 
   /// Scrubs the API key from a string built from an underlying exception,

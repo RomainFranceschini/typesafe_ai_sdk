@@ -70,12 +70,14 @@ Choice and score labels can be Dart enums, which the official SDKs cannot do.
 | `baseUrl` | `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` |
 | `defaultModel` | `TYPESAFE_DEFAULT_MODEL` | `jev-latest` |
 | `timeout` | — | 10 s per attempt |
+| `maxResponseBodyBytes` | — | 10 MiB |
 | `retry` | — | 2 retries, 500 ms to 5 s backoff |
 
 Explicit values beat environment variables, which beat defaults.
 
 Call `client.close()` when finished. If you pass your own `httpClient`,
-closing it is yours to do.
+closing it is yours to do. Timeouts abort requests made by the default native
+and browser clients; a custom client may ignore the abort signal.
 
 ## Logging
 
@@ -122,7 +124,8 @@ CORS preflight.
 - Answers are looked up by question handle rather than inferred from an object
   literal, because Dart has no mapped types.
 - Choice and score labels may be enums.
-- No request cancellation; timeouts and retries bound every request.
+- Timeouts cancel in-flight requests when the HTTP client supports abortion;
+  there is no caller-controlled cancellation API.
 - `Duration` replaces millisecond integers throughout.
 
 ## License

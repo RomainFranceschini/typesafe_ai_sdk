@@ -33,6 +33,7 @@ final class TypeSafeClient {
     Logger? logger,
     RetryPolicy? retry,
     Duration? timeout,
+    int? maxResponseBodyBytes,
     Map<String, String>? defaultHeaders,
     http.Client? httpClient,
     bool dangerouslyAllowBrowser = false,
@@ -42,6 +43,7 @@ final class TypeSafeClient {
       baseUrl: baseUrl,
       defaultModel: defaultModel,
       timeout: timeout,
+      maxResponseBodyBytes: maxResponseBodyBytes,
       retry: retry,
       defaultHeaders: defaultHeaders,
       dangerouslyAllowBrowser: dangerouslyAllowBrowser,
@@ -56,6 +58,7 @@ final class TypeSafeClient {
       logger: childLogger(base, 'transport'),
       retry: config.retry,
       timeout: config.timeout,
+      maxResponseBodyBytes: config.maxResponseBodyBytes,
     );
     return TypeSafeClient._(
       config: config,
@@ -96,6 +99,9 @@ final class TypeSafeClient {
 
   /// The per-attempt timeout.
   Duration get timeout => _config.timeout;
+
+  /// The largest response body the client will buffer, in bytes.
+  int get maxResponseBodyBytes => _config.maxResponseBodyBytes;
 
   /// Answers named questions about text or structured state.
   ///

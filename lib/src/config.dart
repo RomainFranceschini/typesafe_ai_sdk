@@ -26,6 +26,9 @@ const String defaultModelName = 'jev-latest';
 /// The per-attempt timeout used when none is configured.
 const Duration defaultTimeout = Duration(seconds: 10);
 
+/// The largest response body buffered by default, in bytes.
+const int defaultMaxResponseBodyBytes = 10 * 1024 * 1024;
+
 final RegExp _trailingSlashes = RegExp(r'/+$');
 
 String _stripTrailingSlashes(String url) =>
@@ -38,6 +41,7 @@ final class ResolvedConfig {
     required this.baseUrl,
     required this.defaultModel,
     required this.timeout,
+    required this.maxResponseBodyBytes,
     required this.retry,
     required this.defaultHeaders,
   });
@@ -52,6 +56,7 @@ final class ResolvedConfig {
     String? baseUrl,
     String? defaultModel,
     Duration? timeout,
+    int? maxResponseBodyBytes,
     RetryPolicy? retry,
     Map<String, String>? defaultHeaders,
     bool dangerouslyAllowBrowser = false,
@@ -91,6 +96,15 @@ final class ResolvedConfig {
       );
     }
 
+    final resolvedMaxResponseBodyBytes =
+        maxResponseBodyBytes ?? defaultMaxResponseBodyBytes;
+    if (resolvedMaxResponseBodyBytes <= 0) {
+      throw TypeSafeError(
+        '`maxResponseBodyBytes` must be positive, got '
+        '$resolvedMaxResponseBodyBytes.',
+      );
+    }
+
     final resolvedRetry = retry ?? RetryPolicy();
     _validateRetry(resolvedRetry);
 
@@ -105,6 +119,7 @@ final class ResolvedConfig {
       defaultModel:
           defaultModel ?? readEnv(EnvVars.defaultModel) ?? defaultModelName,
       timeout: resolvedTimeout,
+      maxResponseBodyBytes: resolvedMaxResponseBodyBytes,
       retry: resolvedRetry,
       defaultHeaders: Map.unmodifiable(defaultHeaders ?? const {}),
     );
@@ -121,6 +136,9 @@ final class ResolvedConfig {
 
   /// The per-attempt timeout.
   final Duration timeout;
+
+  /// The largest response body the client will buffer, in bytes.
+  final int maxResponseBodyBytes;
 
   /// The retry policy.
   final RetryPolicy retry;

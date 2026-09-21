@@ -24,6 +24,17 @@ class _ZeroRandom implements Random {
   bool nextBool() => false;
 }
 
+final class _StreamingClient extends http.BaseClient {
+  _StreamingClient(this._handler);
+
+  final Future<http.StreamedResponse> Function(http.BaseRequest request)
+  _handler;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _handler(request);
+}
+
 void main() {
   late List<http.Request> requests;
   late List<Duration> slept;
@@ -37,6 +48,7 @@ void main() {
     Future<http.Response> Function(http.Request request) handler, {
     RetryPolicy? retry,
     Duration timeout = const Duration(seconds: 5),
+    int maxResponseBodyBytes = 10 * 1024 * 1024,
     Map<String, String> defaultHeaders = const {},
     bool browser = false,
   }) {
@@ -51,6 +63,7 @@ void main() {
       logger: _silentLogger(),
       retry: retry ?? RetryPolicy(),
       timeout: timeout,
+      maxResponseBodyBytes: maxResponseBodyBytes,
       random: _ZeroRandom(),
       sleep: (duration) async => slept.add(duration),
       runtime: 'dart/test (test)',
@@ -264,6 +277,152 @@ void main() {
         );
       },
     );
+
+    test('aborts the request when an attempt times out', () async {
+      final responseStream = StreamController<List<int>>();
+      addTearDown(responseStream.close);
+      var aborted = false;
+      final client = _StreamingClient((request) async {
+        if (request case http.AbortableRequest(:final abortTrigger?)) {
+          unawaited(abortTrigger.then((_) => aborted = true));
+        }
+        return http.StreamedResponse(
+          responseStream.stream,
+          200,
+          request: request,
+        );
+      });
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy().copyWith(maxRetries: 0),
+        timeout: const Duration(milliseconds: 10),
+        maxResponseBodyBytes: 1024,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      await expectLater(
+        transport.send('GET', '/v1/models'),
+        throwsA(isA<ApiTimeoutError>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(aborted, isTrue);
+    });
+
+    test('releases the abort trigger after a completed response', () async {
+      var abortTriggerCompleted = false;
+      final client = _StreamingClient((request) async {
+        if (request case http.AbortableRequest(:final abortTrigger?)) {
+          unawaited(abortTrigger.then((_) => abortTriggerCompleted = true));
+        }
+        return http.StreamedResponse(
+          Stream.value(const [1, 2, 3]),
+          200,
+          request: request,
+        );
+      });
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy().copyWith(maxRetries: 0),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 1024,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      await transport.send('GET', '/v1/models');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(abortTriggerCompleted, isTrue);
+    });
+  });
+
+  group('response size', () {
+    test('rejects an oversized declared content length', () async {
+      var calls = 0;
+      var responseStreamCanceled = false;
+      final releaseCancellation = Completer<void>();
+      final responseStream = StreamController<List<int>>(
+        onCancel: () {
+          responseStreamCanceled = true;
+          return releaseCancellation.future;
+        },
+      );
+      addTearDown(() async {
+        if (!releaseCancellation.isCompleted) releaseCancellation.complete();
+        if (responseStream.hasListener) await responseStream.close();
+      });
+      final client = _StreamingClient((request) async {
+        calls++;
+        return http.StreamedResponse(
+          responseStream.stream,
+          200,
+          contentLength: 4,
+          request: request,
+        );
+      });
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy(),
+        timeout: const Duration(milliseconds: 20),
+        maxResponseBodyBytes: 3,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      await expectLater(
+        transport.send('GET', '/v1/models'),
+        throwsA(isA<ApiResponseValidationError>()),
+      );
+      expect(calls, 1);
+      expect(responseStreamCanceled, isTrue);
+    });
+
+    test('rejects an oversized streamed body without retrying', () async {
+      var calls = 0;
+      final client = _StreamingClient((request) async {
+        calls++;
+        return http.StreamedResponse(
+          Stream.fromIterable(const [
+            [1, 2],
+            [3, 4],
+          ]),
+          200,
+          request: request,
+        );
+      });
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy(),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 3,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      await expectLater(
+        transport.send('GET', '/v1/models'),
+        throwsA(isA<ApiResponseValidationError>()),
+      );
+      expect(calls, 1);
+    });
   });
 
   group('errors', () {

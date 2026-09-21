@@ -15,6 +15,7 @@ ResolvedConfig resolve({
   String? baseUrl,
   String? defaultModel,
   Duration? timeout,
+  int? maxResponseBodyBytes,
   RetryPolicy? retry,
   Map<String, String> env = const {},
   bool browser = false,
@@ -24,6 +25,7 @@ ResolvedConfig resolve({
   baseUrl: baseUrl,
   defaultModel: defaultModel,
   timeout: timeout,
+  maxResponseBodyBytes: maxResponseBodyBytes,
   retry: retry,
   dangerouslyAllowBrowser: dangerouslyAllowBrowser,
   env: envOf(env),
@@ -57,6 +59,7 @@ void main() {
       expect(config.defaultModel, 'jev-latest');
       expect(config.baseUrl, 'https://api.typesafe.ai');
       expect(config.timeout, const Duration(seconds: 10));
+      expect(config.maxResponseBodyBytes, 10 * 1024 * 1024);
     });
 
     test('blank environment values are ignored', () {
@@ -134,6 +137,17 @@ void main() {
       );
       expect(
         () => resolve(apiKey: 'k', timeout: const Duration(seconds: -1)),
+        throwsA(isA<TypeSafeError>()),
+      );
+    });
+
+    test('rejects a non-positive response-body limit', () {
+      expect(
+        () => resolve(apiKey: 'k', maxResponseBodyBytes: 0),
+        throwsA(isA<TypeSafeError>()),
+      );
+      expect(
+        () => resolve(apiKey: 'k', maxResponseBodyBytes: -1),
         throwsA(isA<TypeSafeError>()),
       );
     });
