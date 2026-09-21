@@ -75,6 +75,10 @@ Choice and score labels can be Dart enums, which the official SDKs cannot do.
 
 Explicit values beat environment variables, which beat defaults.
 
+A successful response larger than `maxResponseBodyBytes` raises
+`ApiResponseValidationError`; an error response is truncated at that size so
+its status, request ID and `Retry-After` survive.
+
 Call `client.close()` when finished. If you pass your own `httpClient`,
 closing it is yours to do. Timeouts abort requests made by the default native
 and browser clients; a custom client may ignore the abort signal.

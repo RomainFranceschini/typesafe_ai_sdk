@@ -1,15 +1,20 @@
 name: typesafe_ai_sdk
 description: An unofficial Dart SDK for the TypeSafe AI API, with statically typed answers.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/RomainFranceschini/typesafe_ai_sdk
 issue_tracker: https://github.com/RomainFranceschini/typesafe_ai_sdk/issues
+topics:
+- typesafe
+- ai
+- jev
+- classifier
 
 environment:
   sdk: ^3.13.3
 
 dependencies:
   collection: ^1.19.0
-  http: ^1.5.0
+  http: ^1.6.0
   logging: ^1.3.0
 
 dev_dependencies:

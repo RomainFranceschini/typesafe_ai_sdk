@@ -241,4 +241,19 @@ void main() {
     expect(client.maxResponseBodyBytes, 1234);
     client.close();
   });
+
+  test('applies the configured response size limit to requests', () async {
+    final client = TypeSafeClient(
+      apiKey: 'k',
+      maxResponseBodyBytes: 8,
+      httpClient: MockClient(
+        (_) async => http.Response(jsonEncode({'models': <Object?>[]}), 200),
+      ),
+    );
+    addTearDown(client.close);
+    await expectLater(
+      client.models.list(),
+      throwsA(isA<ApiResponseValidationError>()),
+    );
+  });
 }

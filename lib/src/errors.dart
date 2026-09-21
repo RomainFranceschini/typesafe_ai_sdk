@@ -222,7 +222,8 @@ class ApiTimeoutError extends ApiConnectionError {
   final Duration timeout;
 }
 
-/// The response did not match the shape this SDK expects.
+/// The response could not be accepted: it did not match the shape this SDK
+/// expects, or it was larger than the configured `maxResponseBodyBytes`.
 class ApiResponseValidationError extends TypeSafeError {
   /// Creates a validation error, optionally naming the offending [path].
   ApiResponseValidationError(super.message, {this.path});

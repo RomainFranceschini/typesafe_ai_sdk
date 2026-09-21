@@ -109,8 +109,10 @@ final class TypeSafeClient {
   /// object exposing a `toJson()` method.
   ///
   /// Throws [TypeSafeError] when [questions] is empty or [state] cannot be
-  /// encoded, [ApiError] for a non-2xx response that survives retries, and
-  /// [ApiConnectionError] when the request cannot be delivered.
+  /// encoded, [ApiError] for a non-2xx response that survives retries,
+  /// [ApiConnectionError] when the request cannot be delivered, and
+  /// [ApiResponseValidationError] when the response is malformed or larger
+  /// than [maxResponseBodyBytes].
   ///
   /// ```dart
   /// final billing = Noul(instructions: 'Is this about billing?');

@@ -423,6 +423,214 @@ void main() {
       );
       expect(calls, 1);
     });
+
+    test('accepts a declared content length exactly at the limit', () async {
+      final client = _StreamingClient(
+        (request) async => http.StreamedResponse(
+          Stream.value(utf8.encode('{}!')),
+          200,
+          contentLength: 3,
+          request: request,
+        ),
+      );
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy(),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 3,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      final response = await transport.send('GET', '/v1/models');
+      expect(response.bodyBytes, hasLength(3));
+    });
+
+    test('accepts a streamed body exactly at the limit', () async {
+      final client = _StreamingClient(
+        (request) async => http.StreamedResponse(
+          Stream.fromIterable(const [
+            [1, 2],
+            [3],
+          ]),
+          200,
+          request: request,
+        ),
+      );
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy(),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 3,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      final response = await transport.send('GET', '/v1/models');
+      expect(response.bodyBytes, [1, 2, 3]);
+    });
+
+    test('truncates an oversized error body and still retries it', () async {
+      var calls = 0;
+      final client = _StreamingClient((request) async {
+        calls++;
+        if (calls == 1) {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode('x' * 4096)),
+            500,
+            contentLength: 4096,
+            request: request,
+            headers: const {'x-typesafe-request-id': 'req_big'},
+          );
+        }
+        return http.StreamedResponse(
+          Stream.value(utf8.encode('{}')),
+          200,
+          request: request,
+        );
+      });
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy(),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 8,
+        sleep: (duration) async => slept.add(duration),
+        random: _ZeroRandom(),
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      final response = await transport.send('GET', '/v1/models');
+      expect(response.statusCode, 200);
+      expect(calls, 2);
+    });
+
+    test('surfaces an oversized error body as a typed ApiError', () async {
+      final client = _StreamingClient(
+        (request) async => http.StreamedResponse(
+          Stream.value(utf8.encode('{"error":"nope"}${'.' * 4096}')),
+          401,
+          request: request,
+          headers: const {'x-typesafe-request-id': 'req_big'},
+        ),
+      );
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: _silentLogger(),
+        retry: RetryPolicy(),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 16,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      await expectLater(
+        transport.send('GET', '/v1/models'),
+        throwsA(
+          isA<AuthenticationError>()
+              .having((e) => e.requestId, 'requestId', 'req_big')
+              .having((e) => e.statusCode, 'statusCode', 401),
+        ),
+      );
+    });
+
+    test('logs the terminal size failure', () async {
+      final capture = LogCapture('transport');
+      addTearDown(capture.cancel);
+      final client = _StreamingClient(
+        (request) async => http.StreamedResponse(
+          Stream.value(const [1, 2, 3, 4]),
+          200,
+          contentLength: 4,
+          request: request,
+        ),
+      );
+      final transport = Transport(
+        httpClient: client,
+        baseUrl: 'https://api.example',
+        apiKey: 'sk-secret-key-value',
+        defaultHeaders: const {},
+        logger: capture.logger,
+        retry: RetryPolicy(),
+        timeout: const Duration(seconds: 5),
+        maxResponseBodyBytes: 3,
+        runtime: 'dart/test (test)',
+        browser: false,
+      );
+
+      await expectLater(
+        transport.send('GET', '/v1/models'),
+        throwsA(isA<ApiResponseValidationError>()),
+      );
+      expect(
+        capture.records.map((r) => r.message).join('\n'),
+        contains('<- failed in'),
+      );
+    });
+  });
+
+  group('timeout mapping', () {
+    test(
+      'maps a TimeoutException from the client to ApiTimeoutError',
+      () async {
+        var calls = 0;
+        final client = _StreamingClient((request) async {
+          calls++;
+          throw TimeoutException('client deadline');
+        });
+        final transport = Transport(
+          httpClient: client,
+          baseUrl: 'https://api.example',
+          apiKey: 'sk-secret-key-value',
+          defaultHeaders: const {},
+          logger: _silentLogger(),
+          retry: RetryPolicy().copyWith(maxRetries: 2, retryTimeouts: false),
+          timeout: const Duration(seconds: 5),
+          maxResponseBodyBytes: 1024,
+          sleep: (duration) async => slept.add(duration),
+          random: _ZeroRandom(),
+          runtime: 'dart/test (test)',
+          browser: false,
+        );
+
+        await expectLater(
+          transport.send('GET', '/v1/models'),
+          throwsA(
+            isA<ApiTimeoutError>().having(
+              (e) => e.timeout,
+              'timeout',
+              const Duration(seconds: 5),
+            ),
+          ),
+        );
+        // `retryTimeouts: false` applies, so the attempt is not repeated.
+        expect(calls, 1);
+      },
+    );
+
+    test('rejects a non-positive per-call timeout', () async {
+      final transport = transportFor((_) async => http.Response('{}', 200));
+      await expectLater(
+        transport.send('GET', '/v1/models', timeout: Duration.zero),
+        throwsA(isA<TypeSafeError>()),
+      );
+      expect(requests, isEmpty);
+    });
   });
 
   group('errors', () {
@@ -504,6 +712,7 @@ void main() {
       logger: capture.logger,
       retry: RetryPolicy(),
       timeout: const Duration(seconds: 5),
+      maxResponseBodyBytes: 10 * 1024 * 1024,
       random: _ZeroRandom(),
       sleep: (duration) async {},
       runtime: 'dart/test (test)',
@@ -535,6 +744,7 @@ void main() {
       logger: capture.logger,
       retry: RetryPolicy(),
       timeout: const Duration(seconds: 5),
+      maxResponseBodyBytes: 10 * 1024 * 1024,
       random: _ZeroRandom(),
       sleep: (duration) async {},
       runtime: 'dart/test (test)',
@@ -560,6 +770,7 @@ void main() {
       logger: capture.logger,
       retry: RetryPolicy(),
       timeout: const Duration(seconds: 5),
+      maxResponseBodyBytes: 10 * 1024 * 1024,
       random: _ZeroRandom(),
       sleep: (duration) async {},
       runtime: 'dart/test (test)',

@@ -71,6 +71,11 @@ final class Models {
   final Transport _transport;
 
   /// Lists the models available to the account.
+  ///
+  /// Throws [ApiError] for a non-2xx response that survives retries,
+  /// [ApiConnectionError] when the request cannot be delivered, and
+  /// [ApiResponseValidationError] when the response is malformed or larger
+  /// than the client's `maxResponseBodyBytes`.
   Future<List<ModelCard>> list({
     Duration? timeout,
     RetryPolicy? retry,
